@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Bun
+bun.lockb
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# authXtract session storage (NEVER commit!)
+.authxtract/
+
+# Exported auth states (NEVER commit!)
+auth-state.json
+*-state.json
+*.enc.json
