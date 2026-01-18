@@ -9,5 +9,5 @@ test('capture page', async ({ page }) => {
   // Confirm page loaded successfully
   await expect(page).toHaveURL(getTargetHostname());
 
-  await page.close();
+  // await page.close();
 });
