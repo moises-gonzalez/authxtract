@@ -21,45 +21,96 @@ Automation testers face significant challenges when handling authentication in t
 
 ## Approach
 
-authXtract solves this by capturing authenticated browser state and securely storing it for reuse:
+### Workflow
 
-1. **Capture** — Open a browser, let the user authenticate (including MFA), then extract cookies/storage
-2. **Encrypt** — Store the session state encrypted with a master password
-3. **Export** — Decrypt and export to Playwright-compatible `storageState.json`
-4. **Reuse** — Tests skip login entirely by loading pre-authenticated state
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────┐     ┌──────────────┐
+│   CAPTURE   │ ──▶ │    LOGIN     │ ──▶ │   EXTRACT   │ ──▶ │    STORE     │
+│  (CLI cmd)  │     │  (User MFA)  │     │  (Cookies)  │     │ (Encrypted)  │
+└─────────────┘     └──────────────┘     └─────────────┘     └──────────────┘
+                                                                     │
+                    ┌──────────────┐     ┌─────────────┐             │
+                    │    REUSE     │ ◀── │   INJECT    │ ◀───────────┘
+                    │  (Skip auth) │     │  (Browser)  │
+                    └──────────────┘     └─────────────┘
+```
 
-### Key Features
+### Phase 1: Capture Session
 
-- ✅ Supports **all authentication methods** (SSO, MFA, OAuth, etc.)
-- ✅ **Encrypted storage** with password protection
-- ✅ **Session expiry tracking** with warnings
-- ✅ **CLI-first** design for CI/CD integration
-- ✅ **Playwright-native** export format
+1. **CLI launches browser** — Playwright opens a headed Chromium browser
+2. **User authenticates** — Manual login including MFA, SSO, OAuth, etc.
+3. **Signal completion** — User presses a key or closes a modal to signal login complete
+4. **Extract state** — Capture cookies, localStorage, and sessionStorage
+
+### Phase 2: Store Securely
+
+1. **Export state** — Use Playwright's `context.storageState()` for cookies + storage
+2. **Encrypt** — AES-256-GCM encryption with user-provided password
+3. **Save locally** — Store in `.authxtract/` directory (gitignored)
+4. **Track metadata** — Session name, URL, expiry timestamp
+
+### Phase 3: Reuse in Tests
+
+1. **Decrypt state** — Unlock with password
+2. **Inject into browser** — Load via Playwright's `storageState` option
+3. **Skip authentication** — Tests start already logged in
 
 ---
 
 ## Technology Stack
 
-| Component | Technology | Rationale |
-|-----------|------------|-----------|
-| **Runtime** | Bun | Fast startup, native TypeScript, modern tooling |
-| **Browser Automation** | Playwright | Industry standard, excellent auth handling |
-| **CLI Framework** | Commander + Inquirer | Rich interactive prompts, clean UX |
-| **Encryption** | Node.js crypto (AES-256-GCM) | Strong encryption, built-in |
-| **Output Format** | Playwright `storageState` | Direct compatibility with test frameworks |
+| Component | Choice | Rationale |
+|-----------|--------|-----------|
+| **Runtime** | Node.js + npm | Wide compatibility, stable ecosystem |
+| **Browser** | Playwright | Native `storageState` export/import, multi-browser support |
+| **CLI** | Commander.js | Lightweight, intuitive command structure |
+| **Prompts** | Inquirer.js | Interactive password input with masking |
+| **Encryption** | Node.js `crypto` | Built-in AES-256-GCM, no dependencies |
+| **Storage** | JSON files | Simple, portable, works with Playwright directly |
+
+---
+
+## Capturing Authentication State
+
+Using Playwright's **built-in `storageState()`** method:
+
+```typescript
+// After user logs in
+const state = await context.storageState();
+// Contains: cookies, localStorage, sessionStorage
+```
+
+This is Playwright-native, captures everything needed (cookies, localStorage, sessionStorage), and directly exports to a Playwright-compatible format.
+
+---
+
+## Storage Structure
+
+```
+.authxtract/
+├── sessions/
+│   ├── my-app.enc          # Encrypted session state
+│   └── staging-env.enc
+└── metadata.json           # Session names, URLs, expiry times
+```
+
+**Security:**
+- All session files encrypted with AES-256-GCM
+- Password never stored — required at decrypt time
+- `.authxtract/` added to `.gitignore` by default
 
 ---
 
 ## CLI Commands
 
 ```bash
-# Capture a new session
+# Capture a new session (opens browser, waits for login)
 authxtract capture <name> --url <login-url>
 
-# List stored sessions  
+# List stored sessions
 authxtract list
 
-# Export for Playwright
+# Export decrypted state for Playwright
 authxtract export <name> --output ./auth-state.json
 
 # Delete a session
@@ -68,7 +119,7 @@ authxtract delete <name>
 
 ---
 
-## Usage in Playwright
+## Usage in Playwright Tests
 
 ```typescript
 import { test } from '@playwright/test';
@@ -76,7 +127,7 @@ import { test } from '@playwright/test';
 // Skip login — use pre-authenticated state
 test.use({ storageState: './auth-state.json' });
 
-test('authenticated test', async ({ page }) => {
+test('dashboard loads for authenticated user', async ({ page }) => {
   await page.goto('https://app.example.com/dashboard');
   // Already logged in!
 });
