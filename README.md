@@ -26,12 +26,12 @@ npm run build
 Launch a browser, manually authenticate, and save the session:
 
 ```bash
-npm run start capture <session-name> -u <login-url>
+npm run start -- capture <session-name> -u <login-url>
 ```
 
 Example:
 ```bash
-npm run start capture my-app -u https://example.com/login
+npm run start -- capture my-app -u https://example.com/login
 ```
 
 This will:
@@ -45,7 +45,7 @@ This will:
 View all stored sessions:
 
 ```bash
-npm run start list
+npm run start -- list
 ```
 
 ### Export a Session
@@ -53,12 +53,12 @@ npm run start list
 Export a session to a JSON file for use in Playwright tests:
 
 ```bash
-npm run start export <session-name> --output <path>
+npm run start -- export <session-name> --output <path>
 ```
 
 Example:
 ```bash
-npm run start export my-app --output ./playwright-auth.json
+npm run start -- export my-app --output ./playwright-auth.json
 ```
 
 If `--output` is not specified, defaults to `./auth-state.json`.
@@ -68,7 +68,7 @@ If `--output` is not specified, defaults to `./auth-state.json`.
 Remove a stored session:
 
 ```bash
-npm run start delete <session-name>
+npm run start -- delete <session-name>
 ```
 
 ## Development Mode
@@ -76,10 +76,10 @@ npm run start delete <session-name>
 Run commands without building first:
 
 ```bash
-npm run dev capture <session-name> -u <login-url>
-npm run dev list
-npm run dev export <session-name> --output <path> 
-npm run dev delete <session-name>
+npm run dev -- capture <session-name> -u <login-url>
+npm run dev -- list
+npm run dev -- export <session-name> --output <path>
+npm run dev -- delete <session-name>
 ```
 
 For export, --output or -o works.
