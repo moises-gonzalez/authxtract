@@ -125,6 +125,7 @@ TARGET_URL=https://example.com npx playwright test
 
 ## Notes
 
+- **Windows users**: Use Command Prompt (`cmd`) instead of PowerShell. PowerShell incorrectly intercepts CLI flags like `-u`
 - The browser launches in headed mode (visible window) to allow manual authentication
 - Sessions are stored as unencrypted JSON files - do not commit them to version control
 - Add `.authxtract/` to your `.gitignore` file
