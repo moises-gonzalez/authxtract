@@ -1,7 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { getTargetUrl, getTargetHostname } from './helpers/env';
 
-test('capture page', async ({ page }) => {
+// Use captures session
+test.use({
+  storageState: './auth-state.json',
+});
+
+test('Authenticated page access', async ({ page }) => {
   const targetUrl = getTargetUrl();
 
   await page.goto(targetUrl);
