@@ -10,3 +10,4 @@ node_modules/
 # authXtract
 /.authxtract/
 /dist/
+.env
