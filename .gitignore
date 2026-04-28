@@ -11,3 +11,4 @@ node_modules/
 /.authxtract/
 /dist/
 .env
+auth-state.json
