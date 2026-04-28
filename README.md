@@ -1,6 +1,12 @@
 # authXtract
 
-A CLI tool for capturing and managing authentication sessions from web browsers for Playwright automation testing. Allows testers to manually authenticate (including MFA) in a browser, then store and reuse that session state.
+A CLI tool for **securely** capturing and managing authentication sessions from web browsers for Playwright automation testing. It allows manual authentication (including MFA), stores session state **encrypted at rest**, and exports decrypted JSON for testing.
+
+## Security Features
+
+- **AES-256 Encryption**: All captured sessions are stored encrypted on disk.
+- **Key-Protected**: Operations require a 32-character encryption key.
+- **Secure Export**: Decrypted JSON is only generated when explicitly exported for testing.
 
 ## Installation
 
@@ -21,9 +27,24 @@ npm run build
 
 ## Usage
 
-### Capture a Session
+### 1. Set Encryption Key (Recommended)
+Set the `AUTHXTRACT_KEY` environment variable with a 32-character string.
 
-Launch a browser, manually authenticate, and save the session:
+**CMD (recommended):**
+```cmd
+set AUTHXTRACT_KEY=12345678901234567890123456789012
+```
+
+**Bash:**
+```bash
+export AUTHXTRACT_KEY="12345678901234567890123456789012"
+```
+
+*Alternatively, you can provide the key via the `--key` flag or enter it interactively when prompted.*
+
+### 2. Capture a Session
+
+Launch a browser, manually authenticate, and save the encrypted session:
 
 ```bash
 npm run start -- capture <session-name> -u <login-url>
@@ -35,22 +56,24 @@ npm run start -- capture my-app -u https://example.com/login
 ```
 
 This will:
-1. Open a Chromium browser at the specified URL
-2. Wait for you to complete the login process (including MFA if required)
-3. Press Enter in the terminal when authentication is complete
-4. Save the browser's storage state (cookies, localStorage, sessionStorage)
+1. Open a Chromium browser at the specified URL.
+2. Wait for you to complete the login process (including MFA/SSO).
+3. Press **Enter** in the terminal when login is complete.
+4. Save the encrypted storage state to `.authxtract/sessions/`.
 
-### List Saved Sessions
+### 3. List Saved Sessions
 
 View all stored sessions:
 
 ```bash
 npm run start -- list
+npm run start -- list --key <your-32-char-key>
 ```
+*`list` reads the `AUTHXTRACT_KEY` env var or accepts `--key` to decrypt metadata, but does not prompt interactively. Without a key, sessions are listed by filename only.*
 
-### Export a Session
+### 4. Export a Session
 
-Export a session to a JSON file for use in Playwright tests:
+Export a session to a plain JSON file for use in Playwright tests:
 
 ```bash
 npm run start -- export <session-name> --output <path>
@@ -60,10 +83,9 @@ Example:
 ```bash
 npm run start -- export my-app --output ./playwright-auth.json
 ```
+**Note:** The exported file is **decrypted** standard JSON. Treat this file as sensitive and do not commit it to version control.
 
-If `--output` is not specified, defaults to `./auth-state.json`.
-
-### Delete a Session
+### 5. Delete a Session
 
 Remove a stored session:
 
@@ -73,7 +95,7 @@ npm run start -- delete <session-name>
 
 ## Development Mode
 
-Run commands without building first:
+Run commands without building:
 
 ```bash
 npm run dev -- capture <session-name> -u <login-url>
@@ -81,8 +103,6 @@ npm run dev -- list
 npm run dev -- export <session-name> --output <path>
 npm run dev -- delete <session-name>
 ```
-
-For export, --output or -o works.
 
 ## Using with Playwright Tests
 
@@ -101,31 +121,28 @@ test('authenticated test', async ({ page }) => {
 });
 ```
 
-Or configure it globally in `playwright.config.ts`:
+## Running Tests
 
-```typescript
-import { defineConfig } from '@playwright/test';
+Tests run on **Chrome only** and require a `TARGET_URL` env var and an exported `./auth-state.json` session file.
 
-export default defineConfig({
-  use: {
-    storageState: './playwright-auth.json',
-  },
-});
+```bash
+# Run all tests
+TARGET_URL=https://example.com npx playwright test --project=chromium
+
+# Run a single test file
+TARGET_URL=https://example.com npx playwright test tests/example.spec.ts --project=chromium
+
+# Run by test name
+TARGET_URL=https://example.com npx playwright test -g "test name" --project=chromium
 ```
 
 ## Storage Location
 
-Sessions are stored as JSON files in `.authxtract/sessions/` within the project directory.
-
-## Running Tests
-
-```bash
-TARGET_URL=https://example.com npx playwright test
-```
+- Encrypted sessions: `.authxtract/sessions/*.json`
+- **Do not commit these files** if you share the same key across teams, or if you consider the metadata sensitive.
 
 ## Notes
 
-- **Windows users**: Use Command Prompt (`cmd`) instead of PowerShell. PowerShell incorrectly intercepts CLI flags like `-u`
-- The browser launches in headed mode (visible window) to allow manual authentication
-- Sessions are stored as unencrypted JSON files - do not commit them to version control
-- Add `.authxtract/` to your `.gitignore` file
+- **Windows users**: Use **Command Prompt (`cmd`)** or **Bash**. PowerShell is **not recommended** — it mishandles the `--` separator in `npm run` commands, causing flags like `-u` and `--url` to be consumed by npm instead of being passed to the CLI. If you must use PowerShell, invoke the script directly: `node dist/index.js capture <name> -u <url>`.
+- **Encryption Key**: Must be exactly 32 characters long.
+- **Headless Mode**: Not supported. All captures are heavily manual to support MFA/SSO.

@@ -9,6 +9,7 @@ import { saveSession } from '../utils/storage';
 export interface CaptureOptions {
     url: string;
     name: string;
+    key?: string;
 }
 
 /**
@@ -32,7 +33,7 @@ function waitForEnter(message: string): Promise<void> {
  * Execute the capture command
  */
 export async function capture(options: CaptureOptions): Promise<void> {
-    const { url, name } = options;
+    const { url, name, key } = options;
 
     console.log(`\n🔐 authXtract - Capture Session\n`);
     console.log(`Session name: ${name}`);
@@ -60,12 +61,13 @@ export async function capture(options: CaptureOptions): Promise<void> {
     const storageState = await context.storageState();
 
     // Save the session
-    saveSession(name, storageState, url);
+    saveSession(name, storageState, url, key);
 
     // Close browser
     await browser.close();
 
     console.log('\n✨ Session captured successfully!');
     console.log(`\nTo use in Playwright tests:`);
+    console.log('You must set AUTHXTRACT_KEY env variable or provide it when exporting.');
     console.log(`  npx authxtract export ${name} --output ./auth-state.json\n`);
 }

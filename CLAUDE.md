@@ -9,56 +9,52 @@ authXtract is a CLI tool for capturing and managing authentication sessions from
 ## Build & Run Commands
 
 ```bash
-# Install dependencies
-npm install
-
-# Install Playwright browser (Chromium only)
-npx playwright install chromium
-
-# Build the project
-npm run build
-
-# Run the CLI (after build)
-npm run start <command>
-
-# Development mode (no build required)
-npm run dev <command>
+npm install                          # Install dependencies
+npx playwright install chromium      # Install Playwright browser (Chromium only)
+npm run build                        # Build (tsc → dist/)
+npm run start <command>              # Run CLI (after build)
+npm run dev <command>                # Development mode (ts-node, no build required)
 ```
 
 ## CLI Commands
 
-- `npm run dev capture <name> -u <url>` - Launch browser, authenticate manually, save session
-- `npm run dev list` - List all stored sessions
-- `npm run dev export <name> --output <path>` - Export session to Playwright storageState JSON
-- `npm run dev delete <name>` - Delete a stored session
+All commands that read/write sessions require a 32-character encryption key, provided via `AUTHXTRACT_KEY` env var, `--key` flag, or interactive prompt.
+
+- `npm run dev capture <name> -u <url>` — Launch headed browser, authenticate manually, save encrypted session
+- `npm run dev list` — List all stored sessions (requires key to decrypt metadata)
+- `npm run dev export <name> --output <path>` — Export session to decrypted Playwright storageState JSON
+- `npm run dev delete <name>` — Delete a stored session
 
 ## Testing
 
+All tests run on **Chrome only** — no other browsers required.
+
+Tests require a `TARGET_URL` env var and an exported `./auth-state.json` session file.
+
 ```bash
-# Run Playwright tests (requires TARGET_URL environment variable)
-TARGET_URL=https://example.com npx playwright test
+# Run all tests
+TARGET_URL=https://example.com npx playwright test --project=chromium
+
+# Run a single test file
+TARGET_URL=https://example.com npx playwright test tests/example.spec.ts --project=chromium
+
+# Run by test name
+TARGET_URL=https://example.com npx playwright test -g "Authenticated page access" --project=chromium
 ```
+
+**Note:** `playwright.config.ts` still has a `firefox` project enabled — it should be removed to match the Chrome-only policy.
 
 ## Architecture
 
-```
-src/
-├── index.ts              # CLI entry point (Commander) with all command definitions
-├── commands/
-│   └── capture.ts        # Browser session capture workflow
-└── utils/
-    └── storage.ts        # Session persistence to ./.authxtract/sessions/
-```
+- **`src/index.ts`** — CLI entry point (Commander). Defines all commands. `list`, `export`, and `delete` dynamically import `src/utils/storage.ts`.
+- **`src/commands/capture.ts`** — Browser session capture workflow. Launches headed Chromium, waits for manual auth, saves encrypted state via `saveSession()`.
+- **`src/utils/storage.ts`** — Encryption (AES-256) and session CRUD (`saveSession`, `loadSession`, `listSessions`, `deleteSession`). Sessions stored as encrypted JSON in `.authxtract/sessions/`.
+- **`tests/`** — Playwright E2E tests using exported `auth-state.json`. Helper `tests/helpers/env.ts` provides `getTargetUrl()` / `getTargetHostname()`.
 
-**Data flow:** Browser storageState (JSON) → saved as `./.authxtract/sessions/<name>.json`
+**Data flow:** Browser storageState → AES-256 encrypted JSON in `.authxtract/sessions/<name>.json` → decrypted export to `auth-state.json` for Playwright tests
 
 **Key patterns:**
 - CLI uses Commander for argument parsing
 - User prompts use Node.js readline (not Inquirer)
-- Sessions stored as **unencrypted JSON** in `./.authxtract/sessions/` (project directory, not home)
+- Encryption key must be exactly 32 characters
 - Browser launches in headed mode (`headless: false`) for manual authentication
-
-## Testing Notes
-
-- All tests run on **Chrome only** - no other browsers required
-- Tests require `TARGET_URL` environment variable
