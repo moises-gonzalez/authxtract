@@ -23,6 +23,12 @@ npx playwright install chromium
 
 # Build the project
 npm run build
+
+# One-time: register the `authxtract` command globally on this machine,
+# so it can be invoked via `npx authxtract …` or `authxtract …`.
+# This bypasses npm's `run` argv parsing, which otherwise eats flags
+# like `-u` and `--key` before they reach the CLI.
+npm link
 ```
 
 ## Usage
@@ -47,13 +53,17 @@ export AUTHXTRACT_KEY="12345678901234567890123456789012"
 Launch a browser, manually authenticate, and save the encrypted session:
 
 ```bash
-npm run start -- capture <session-name> -u <login-url>
+authxtract capture <session-name> -u <login-url>
+# or, equivalently:
+npx authxtract capture <session-name> -u <login-url>
 ```
 
 Example:
 ```bash
-npm run start -- capture my-app -u https://example.com/login
+authxtract capture my-app -u https://example.com/login
 ```
+
+*If you skipped `npm link`, use `node dist/index.js capture my-app -u https://example.com/login` instead — same effect, no global setup.*
 
 This will:
 1. Open a Chromium browser at the specified URL.
@@ -66,8 +76,8 @@ This will:
 View all stored sessions:
 
 ```bash
-npm run start -- list
-npm run start -- list --key <your-32-char-key>
+authxtract list
+authxtract list --key <your-32-char-key>
 ```
 *`list` reads the `AUTHXTRACT_KEY` env var or accepts `--key` to decrypt metadata, but does not prompt interactively. Without a key, sessions are listed by filename only.*
 
@@ -76,12 +86,12 @@ npm run start -- list --key <your-32-char-key>
 Export a session to a plain JSON file for use in Playwright tests:
 
 ```bash
-npm run start -- export <session-name> --output <path>
+authxtract export <session-name> --output <path>
 ```
 
 Example:
 ```bash
-npm run start -- export my-app --output ./playwright-auth.json
+authxtract export my-app --output ./playwright-auth.json
 ```
 **Note:** The exported file is **decrypted** standard JSON. Treat this file as sensitive and do not commit it to version control.
 
@@ -90,7 +100,7 @@ npm run start -- export my-app --output ./playwright-auth.json
 Remove a stored session:
 
 ```bash
-npm run start -- delete <session-name>
+authxtract delete <session-name>
 ```
 
 ## Development Mode
@@ -102,6 +112,12 @@ npm run dev -- capture <session-name> -u <login-url>
 npm run dev -- list
 npm run dev -- export <session-name> --output <path>
 npm run dev -- delete <session-name>
+```
+
+*Same caveat as `npm run start`: npm intercepts flags it recognizes (e.g. `--key`) from the full argv even after `--`. If your flags go missing, invoke `ts-node` directly instead:*
+
+```bash
+npx ts-node src/index.ts capture <session-name> -u <login-url> --key <32-char-key>
 ```
 
 ## Using with Playwright Tests
@@ -143,6 +159,6 @@ TARGET_URL=https://example.com npx playwright test -g "test name" --project=chro
 
 ## Notes
 
-- **Windows users**: Use **Command Prompt (`cmd`)** or **Bash**. PowerShell is **not recommended** — it mishandles the `--` separator in `npm run` commands, causing flags like `-u` and `--url` to be consumed by npm instead of being passed to the CLI. If you must use PowerShell, invoke the script directly: `node dist/index.js capture <name> -u <url>`.
+- **Invocation**: Always prefer `authxtract …`, `npx authxtract …`, or `node dist/index.js …`. Avoid `npm run start -- …` and `npm run dev -- …` — npm scans the full argv (even after `--`) for keys that match its own config, so flags like `--key` get silently consumed before they reach the CLI, regardless of shell (cmd, bash, PowerShell).
 - **Encryption Key**: Must be exactly 32 characters long.
 - **Headless Mode**: Not supported. All captures are heavily manual to support MFA/SSO.
