@@ -12,3 +12,8 @@ node_modules/
 /dist/
 .env
 auth-state.json
+projectplan.md
+
+# LLM Related
+.claude/
+CLAUDE.md

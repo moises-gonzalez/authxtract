@@ -4,9 +4,12 @@ A CLI tool for **securely** capturing and managing authentication sessions from 
 
 ## Security Features
 
-- **AES-256 Encryption**: All captured sessions are stored encrypted on disk.
-- **Key-Protected**: Operations require a 32-character encryption key.
-- **Secure Export**: Decrypted JSON is only generated when explicitly exported for testing.
+- **AES-256-GCM Authenticated Encryption**: All captured sessions are stored encrypted on disk; any tampering or wrong key fails decryption cleanly.
+- **scrypt Key Derivation**: The encryption key is derived from your passphrase with a fresh random salt per file. Passphrases can be any length.
+- **Masked Key Entry**: The interactive key prompt never echoes what you type.
+- **Strict Session Names**: Session names are validated so they can never escape the session store.
+- **Restrictive Permissions**: The store is created `0700` and session/export files `0600` (POSIX; Windows relies on profile ACLs).
+- **Secure Export**: Decrypted JSON is only generated when explicitly exported for testing, or streamed via `--stdout` to avoid persisting it.
 
 ## Installation
 
@@ -34,19 +37,19 @@ npm link
 ## Usage
 
 ### 1. Set Encryption Key (Recommended)
-Set the `AUTHXTRACT_KEY` environment variable with a 32-character string.
+Set the `AUTHXTRACT_KEY` environment variable with a strong passphrase (any length; it is run through scrypt). In CI, source it from your secret manager.
 
 **CMD (recommended):**
 ```cmd
-set AUTHXTRACT_KEY=12345678901234567890123456789012
+set AUTHXTRACT_KEY=use-a-long-random-passphrase-here
 ```
 
 **Bash:**
 ```bash
-export AUTHXTRACT_KEY="12345678901234567890123456789012"
+export AUTHXTRACT_KEY="use-a-long-random-passphrase-here"
 ```
 
-*Alternatively, you can provide the key via the `--key` flag or enter it interactively when prompted.*
+*If the env var is not set, you will be prompted interactively — input is masked and never echoed. The `--key` flag still works but is **deprecated** (it leaks the key into shell history and process lists) and prints a warning.*
 
 ### 2. Capture a Session
 
@@ -77,9 +80,9 @@ View all stored sessions:
 
 ```bash
 authxtract list
-authxtract list --key <your-32-char-key>
+authxtract list --json          # machine-readable: stdout carries JSON only
 ```
-*`list` reads the `AUTHXTRACT_KEY` env var or accepts `--key` to decrypt metadata, but does not prompt interactively. Without a key, sessions are listed by filename only.*
+*`list` reads the `AUTHXTRACT_KEY` env var (or the deprecated `--key`) to decrypt metadata, but does not prompt interactively. Without a key, sessions are listed by filename only.*
 
 ### 4. Export a Session
 
@@ -92,8 +95,14 @@ authxtract export <session-name> --output <path>
 Example:
 ```bash
 authxtract export my-app --output ./playwright-auth.json
+
+# Or avoid writing a file at all — stream the decrypted state to stdout:
+authxtract export my-app --stdout > ./playwright-auth.json
+
+# Machine-readable result (name/url/capturedAt/output) after writing the file:
+authxtract export my-app --json
 ```
-**Note:** The exported file is **decrypted** standard JSON. Treat this file as sensitive and do not commit it to version control.
+**Note:** The exported file is **decrypted** standard JSON containing live session tokens — it is password-equivalent. It is written with `0600` permissions (POSIX). Keep it out of version control and delete it after use.
 
 ### 5. Delete a Session
 
@@ -102,6 +111,20 @@ Remove a stored session:
 ```bash
 authxtract delete <session-name>
 ```
+
+## Output, Flags & Exit Codes
+
+- Status messages go to **stderr**; command data (lists, JSON, exported state) goes to **stdout**, so piping and redirection stay clean.
+- Output is TTY-aware: interactive terminals get decorated messages; non-interactive/CI runs get plain text with `warning:`/`error:` prefixes and no emoji.
+- Global flags (place before the subcommand): `--quiet` (errors and data only), `--verbose` (detailed diagnostics, including crypto error internals).
+
+| Exit code | Meaning |
+| --------- | ------- |
+| `0`   | Success |
+| `1`   | Usage error — bad arguments, invalid session name, missing/empty key, unknown session |
+| `2`   | I/O or crypto failure — decryption failed, legacy/malformed file, filesystem error |
+| `3`   | Browser automation failure — launch, navigation, or state extraction |
+| `130` | Interrupted (Ctrl+C) — the browser is closed and nothing is written |
 
 ## Development Mode
 
@@ -117,7 +140,17 @@ npm run dev -- delete <session-name>
 *Same caveat as `npm run start`: npm intercepts flags it recognizes (e.g. `--key`) from the full argv even after `--`. If your flags go missing, invoke `ts-node` directly instead:*
 
 ```bash
-npx ts-node src/index.ts capture <session-name> -u <login-url> --key <32-char-key>
+npx ts-node src/index.ts capture <session-name> -u <login-url>
+```
+
+Quality gates (these run in CI on every push/PR):
+
+```bash
+npm run typecheck   # tsc --noEmit
+npm run lint        # ESLint
+npm run format      # Prettier (writes)
+npm run test:unit   # offline unit tests
+npm audit --audit-level=high
 ```
 
 ## Using with Playwright Tests
@@ -139,7 +172,13 @@ test('authenticated test', async ({ page }) => {
 
 ## Running Tests
 
-Tests run on **Chrome only** and require a `TARGET_URL` env var and an exported `./auth-state.json` session file.
+Unit tests (storage/crypto/path-validation) run offline with no browser:
+
+```bash
+npm run test:unit
+```
+
+E2E tests run on **Chrome only** and require a `TARGET_URL` env var and an exported `./auth-state.json` session file.
 
 ```bash
 # Run all tests
@@ -160,5 +199,17 @@ TARGET_URL=https://example.com npx playwright test -g "test name" --project=chro
 ## Notes
 
 - **Invocation**: Always prefer `authxtract …`, `npx authxtract …`, or `node dist/index.js …`. Avoid `npm run start -- …` and `npm run dev -- …` — npm scans the full argv (even after `--`) for keys that match its own config, so flags like `--key` get silently consumed before they reach the CLI, regardless of shell (cmd, bash, PowerShell).
-- **Encryption Key**: Must be exactly 32 characters long.
+- **Encryption Key**: Any non-empty passphrase; a 32-byte AES key is derived via scrypt with a per-file salt.
+- **Legacy Sessions**: Sessions captured before the AES-256-GCM format (v2) are detected and rejected — re-run `capture` to migrate.
+- **Diagnostics**: Decryption failures are intentionally generic. Pass `--verbose` (before the subcommand) for details.
 - **Headless Mode**: Not supported. All captures are heavily manual to support MFA/SSO.
+
+## Project Docs
+
+- [SECURITY.md](SECURITY.md) — threat model, what the encryption does and does not guarantee, vulnerability reporting
+- [CONTRIBUTING.md](CONTRIBUTING.md) — dev setup, quality gates, PR guidelines
+- [CHANGELOG.md](CHANGELOG.md) — release history (Keep a Changelog)
+
+## License
+
+[ISC](LICENSE) © Moises Gonzalez
