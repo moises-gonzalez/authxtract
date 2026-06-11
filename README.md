@@ -80,9 +80,9 @@ View all stored sessions:
 
 ```bash
 authxtract list
-authxtract list --key <your-32-char-key>
+authxtract list --json          # machine-readable: stdout carries JSON only
 ```
-*`list` reads the `AUTHXTRACT_KEY` env var or accepts `--key` to decrypt metadata, but does not prompt interactively. Without a key, sessions are listed by filename only.*
+*`list` reads the `AUTHXTRACT_KEY` env var (or the deprecated `--key`) to decrypt metadata, but does not prompt interactively. Without a key, sessions are listed by filename only.*
 
 ### 4. Export a Session
 
@@ -98,6 +98,9 @@ authxtract export my-app --output ./playwright-auth.json
 
 # Or avoid writing a file at all — stream the decrypted state to stdout:
 authxtract export my-app --stdout > ./playwright-auth.json
+
+# Machine-readable result (name/url/capturedAt/output) after writing the file:
+authxtract export my-app --json
 ```
 **Note:** The exported file is **decrypted** standard JSON containing live session tokens — it is password-equivalent. It is written with `0600` permissions (POSIX). Keep it out of version control and delete it after use.
 
@@ -108,6 +111,20 @@ Remove a stored session:
 ```bash
 authxtract delete <session-name>
 ```
+
+## Output, Flags & Exit Codes
+
+- Status messages go to **stderr**; command data (lists, JSON, exported state) goes to **stdout**, so piping and redirection stay clean.
+- Output is TTY-aware: interactive terminals get decorated messages; non-interactive/CI runs get plain text with `warning:`/`error:` prefixes and no emoji.
+- Global flags (place before the subcommand): `--quiet` (errors and data only), `--verbose` (detailed diagnostics, including crypto error internals).
+
+| Exit code | Meaning |
+| --------- | ------- |
+| `0`   | Success |
+| `1`   | Usage error — bad arguments, invalid session name, missing/empty key, unknown session |
+| `2`   | I/O or crypto failure — decryption failed, legacy/malformed file, filesystem error |
+| `3`   | Browser automation failure — launch, navigation, or state extraction |
+| `130` | Interrupted (Ctrl+C) — the browser is closed and nothing is written |
 
 ## Development Mode
 
@@ -123,7 +140,17 @@ npm run dev -- delete <session-name>
 *Same caveat as `npm run start`: npm intercepts flags it recognizes (e.g. `--key`) from the full argv even after `--`. If your flags go missing, invoke `ts-node` directly instead:*
 
 ```bash
-npx ts-node src/index.ts capture <session-name> -u <login-url> --key <32-char-key>
+npx ts-node src/index.ts capture <session-name> -u <login-url>
+```
+
+Quality gates (these run in CI on every push/PR):
+
+```bash
+npm run typecheck   # tsc --noEmit
+npm run lint        # ESLint
+npm run format      # Prettier (writes)
+npm run test:unit   # offline unit tests
+npm audit --audit-level=high
 ```
 
 ## Using with Playwright Tests
@@ -176,3 +203,13 @@ TARGET_URL=https://example.com npx playwright test -g "test name" --project=chro
 - **Legacy Sessions**: Sessions captured before the AES-256-GCM format (v2) are detected and rejected — re-run `capture` to migrate.
 - **Diagnostics**: Decryption failures are intentionally generic. Pass `--verbose` (before the subcommand) for details.
 - **Headless Mode**: Not supported. All captures are heavily manual to support MFA/SSO.
+
+## Project Docs
+
+- [SECURITY.md](SECURITY.md) — threat model, what the encryption does and does not guarantee, vulnerability reporting
+- [CONTRIBUTING.md](CONTRIBUTING.md) — dev setup, quality gates, PR guidelines
+- [CHANGELOG.md](CHANGELOG.md) — release history (Keep a Changelog)
+
+## License
+
+[ISC](LICENSE) © Moises Gonzalez

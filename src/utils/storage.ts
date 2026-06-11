@@ -11,6 +11,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { logger } from './logger';
+import { UsageError } from './errors';
 
 const AUTHXTRACT_DIR = '.authxtract';
 const SESSIONS_DIR = 'sessions';
@@ -75,25 +77,12 @@ export class LegacySessionError extends Error {
     }
 }
 
-let verbose = false;
-
-/** Enable detailed error diagnostics (--verbose). Errors stay generic otherwise. */
-export function setVerbose(value: boolean): void {
-    verbose = value;
-}
-
-function logVerbose(message: string, error?: unknown): void {
-    if (!verbose) return;
-    const detail = error instanceof Error ? `${error.name}: ${error.message}` : '';
-    console.error(`[verbose] ${message}${detail ? ` (${detail})` : ''}`);
-}
-
 /**
  * Passphrases may be any length (the KDF normalizes them) but must not be empty.
  */
 function validatePassphrase(passphrase: string): string {
     if (typeof passphrase !== 'string' || Buffer.byteLength(passphrase, 'utf8') === 0) {
-        throw new Error('Encryption key must not be empty.');
+        throw new UsageError('Encryption key must not be empty.');
     }
     return passphrase;
 }
@@ -104,7 +93,7 @@ function validatePassphrase(passphrase: string): string {
 function getEncryptionKey(): string {
     const key = process.env.AUTHXTRACT_KEY;
     if (!key) {
-        throw new Error('AUTHXTRACT_KEY environment variable is not set. Encryption key is required.');
+        throw new UsageError('AUTHXTRACT_KEY environment variable is not set. Encryption key is required.');
     }
     return validatePassphrase(key);
 }
@@ -162,11 +151,11 @@ function parseEnvelope(fileContents: string): EncryptionEnvelope {
     try {
         parsed = JSON.parse(trimmed);
     } catch (error) {
-        logVerbose('Session file is neither a v2 envelope nor a known legacy format', error);
+        logger.verbose('Session file is neither a v2 envelope nor a known legacy format', error);
         throw new DecryptionError();
     }
     if (typeof parsed !== 'object' || parsed === null) {
-        logVerbose('Session file envelope is not an object');
+        logger.verbose('Session file envelope is not an object');
         throw new DecryptionError();
     }
 
@@ -180,7 +169,7 @@ function parseEnvelope(fileContents: string): EncryptionEnvelope {
         !isHexOfBytes(envelope.tag, TAG_LENGTH) ||
         !isHexOfBytes(envelope.ct)
     ) {
-        logVerbose('Session file envelope is malformed or has an unsupported version');
+        logger.verbose('Session file envelope is malformed or has an unsupported version');
         throw new DecryptionError();
     }
     return envelope as EncryptionEnvelope;
@@ -197,13 +186,10 @@ function decrypt(fileContents: string, passphrase: string): string {
         const key = deriveKey(passphrase, Buffer.from(envelope.salt, 'hex'));
         const decipher = crypto.createDecipheriv(ALGORITHM, key, Buffer.from(envelope.iv, 'hex'));
         decipher.setAuthTag(Buffer.from(envelope.tag, 'hex'));
-        const plaintext = Buffer.concat([
-            decipher.update(Buffer.from(envelope.ct, 'hex')),
-            decipher.final(),
-        ]);
+        const plaintext = Buffer.concat([decipher.update(Buffer.from(envelope.ct, 'hex')), decipher.final()]);
         return plaintext.toString('utf8');
     } catch (error) {
-        logVerbose('Decryption failed', error);
+        logger.verbose('Decryption failed', error);
         throw new DecryptionError();
     }
 }
@@ -214,7 +200,7 @@ function decrypt(fileContents: string, passphrase: string): string {
  */
 export function validateSessionName(name: string): string {
     const invalid = () =>
-        new Error(
+        new UsageError(
             `Invalid session name "${name}". Use 1-64 characters: letters, digits, ".", "_" or "-" (no path separators).`
         );
     if (typeof name !== 'string' || !SESSION_NAME_PATTERN.test(name)) throw invalid();
@@ -305,7 +291,7 @@ export function saveSession(name: string, state: object, url: string, key?: stri
     fs.writeFileSync(sessionPath, encryptedData, { mode: FILE_MODE });
     // writeFileSync's mode only applies on creation; enforce it on overwrite too.
     fs.chmodSync(sessionPath, FILE_MODE);
-    console.log(`✅ Session saved (encrypted): ${sessionPath}`);
+    logger.success(`Session saved (encrypted): ${sessionPath}`);
 }
 
 /**
@@ -326,7 +312,7 @@ export function loadSession(name: string, key?: string): SessionData | null {
     try {
         parsed = JSON.parse(decryptedData);
     } catch (error) {
-        logVerbose('Decrypted session is not valid JSON', error);
+        logger.verbose('Decrypted session is not valid JSON', error);
         throw malformedSessionError(name);
     }
     if (!isValidSessionData(parsed)) {
@@ -345,14 +331,14 @@ export function listSessions(key?: string): SessionMetadata[] {
         return [];
     }
 
-    const files = fs.readdirSync(sessionsPath).filter(f => f.endsWith('.json'));
+    const files = fs.readdirSync(sessionsPath).filter((f) => f.endsWith('.json'));
     const sessions: SessionMetadata[] = [];
 
     // Optimistically try to get key
     const encryptionKey = key || process.env.AUTHXTRACT_KEY || null;
 
     if (!encryptionKey) {
-        console.warn('⚠️ No encryption key found. Listing sessions by filename only.');
+        logger.warn('No encryption key found. Listing sessions by filename only.');
     }
 
     for (const file of files) {
@@ -379,7 +365,7 @@ export function listSessions(key?: string): SessionMetadata[] {
             }
             sessions.push(parsed.metadata);
         } catch (error) {
-            logVerbose(`Failed to read session "${name}"`, error);
+            logger.verbose(`Failed to read session "${name}"`, error);
             sessions.push({
                 name,
                 url:

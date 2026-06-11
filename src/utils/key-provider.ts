@@ -7,6 +7,7 @@
 
 import * as readline from 'readline';
 import { Writable } from 'stream';
+import { logger } from './logger';
 
 export interface KeyProvider {
     /** Identifies the key source (for warnings/diagnostics). */
@@ -15,8 +16,8 @@ export interface KeyProvider {
 }
 
 export function warnKeyFlagDeprecated(): void {
-    console.warn(
-        '⚠️  --key is deprecated: it exposes the key in shell history and process lists. ' +
+    logger.warn(
+        '--key is deprecated: it exposes the key in shell history and process lists. ' +
             'Use the AUTHXTRACT_KEY environment variable (secret-managed in CI) or the interactive prompt instead.'
     );
 }
@@ -47,7 +48,7 @@ export class PromptKeyProvider implements KeyProvider {
     readonly source = 'prompt' as const;
 
     async getPassphrase(): Promise<string> {
-        console.log('🔑 Encryption key required.');
+        logger.info('Encryption key required.', '🔑');
         return promptMasked('Enter encryption key (input hidden): ');
     }
 }
@@ -67,6 +68,8 @@ export function resolveKeyProvider(flagKey?: string): KeyProvider {
  * Read a line from stdin without echoing it. Readline's echo goes through the
  * `output` stream, so a mutable sink that drops writes while muted hides the
  * typed key; the prompt text itself is written before muting kicks in.
+ * The prompt goes to stderr so redirected stdout (e.g. `export --stdout > f`)
+ * never captures prompt text.
  */
 function promptMasked(question: string): Promise<string> {
     return new Promise((resolve) => {
@@ -74,7 +77,7 @@ function promptMasked(question: string): Promise<string> {
         const output = new Writable({
             write(chunk, encoding, callback) {
                 if (!muted) {
-                    process.stdout.write(chunk, encoding);
+                    process.stderr.write(chunk, encoding);
                 }
                 callback();
             },
@@ -91,14 +94,14 @@ function promptMasked(question: string): Promise<string> {
             answered = true;
             muted = false;
             rl.close();
-            process.stdout.write('\n'); // readline's own newline echo was muted
+            process.stderr.write('\n'); // readline's own newline echo was muted
             resolve(answer.trim());
         });
         // stdin closed without an answer (EOF): resolve empty, callers reject it.
         rl.on('close', () => {
             if (!answered) {
                 muted = false;
-                process.stdout.write('\n');
+                process.stderr.write('\n');
                 resolve('');
             }
         });

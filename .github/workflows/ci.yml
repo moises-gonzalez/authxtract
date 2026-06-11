@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Typecheck · lint · unit tests · build · audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      - run: npm run test:unit
+
+      - run: npm run build
+
+      # Audit failures (high or critical) block merge.
+      - run: npm audit --audit-level=high
+
+  # E2E (Playwright, Chrome only) requires a manual login against a real target,
+  # so it stays out of required CI. Run it locally per README:
+  #   TARGET_URL=https://example.com npx playwright test --project=chromium
+  # The spec skips gracefully when TARGET_URL / auth-state.json are absent.
+
+  publish:
+    name: Publish to npm (tag-gated)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+
+      - run: npm ci
+
+      # Internal-first distribution: keep --dry-run until the project goes
+      # public. To go live, drop --dry-run and add an NPM_TOKEN repo secret.
+      - run: npm publish --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -256,8 +256,14 @@ test('P0-8: authentic but structurally invalid session data is rejected', () => 
     const cases: Record<string, string> = {
         'bad-shape': JSON.stringify({ foo: 'bar' }),
         'bad-nonjson': 'not json at all',
-        'bad-url': JSON.stringify({ metadata: { name: 'bad-url', url: 'not a url', capturedAt: 'x' }, state: {} }),
-        'bad-state': JSON.stringify({ metadata: { name: 'bad-state', url: CAPTURE_URL, capturedAt: 'x' }, state: 'nope' }),
+        'bad-url': JSON.stringify({
+            metadata: { name: 'bad-url', url: 'not a url', capturedAt: 'x' },
+            state: {},
+        }),
+        'bad-state': JSON.stringify({
+            metadata: { name: 'bad-state', url: CAPTURE_URL, capturedAt: 'x' },
+            state: 'nope',
+        }),
         'bad-noname': JSON.stringify({ metadata: { url: CAPTURE_URL, capturedAt: 'x' }, state: {} }),
     };
     for (const [name, payload] of Object.entries(cases)) {
