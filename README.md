@@ -10,6 +10,9 @@ A CLI tool for **securely** capturing and managing authentication sessions from 
 - **Strict Session Names**: Session names are validated so they can never escape the session store.
 - **Restrictive Permissions**: The store is created `0700` and session/export files `0600` (POSIX; Windows relies on profile ACLs).
 - **Secure Export**: Decrypted JSON is only generated when explicitly exported for testing, or streamed via `--stdout` to avoid persisting it.
+- **OS Keychain Integration**: Store the passphrase once in the Windows Credential Manager / macOS Keychain / libsecret (`authxtract key store`); a pluggable `AUTHXTRACT_KEY_CMD` hook supports Vault/KMS/secret managers.
+- **Session TTL**: Captures expire after 24h by default (`--ttl`), limiting the blast radius of a leaked store.
+- **Isolated Capture Profile**: Each capture runs in a fresh throwaway browser profile that is deleted afterward — it can never see your personal browser's credentials.
 
 ## Installation
 
@@ -36,20 +39,34 @@ npm link
 
 ## Usage
 
-### 1. Set Encryption Key (Recommended)
-Set the `AUTHXTRACT_KEY` environment variable with a strong passphrase (any length; it is run through scrypt). In CI, source it from your secret manager.
+### 1. Provide the Encryption Key
 
-**CMD (recommended):**
+The passphrase can be any length (it is run through scrypt). Sources are tried in this order:
+
+1. `--key` flag — **deprecated** (leaks into shell history/process lists; prints a warning)
+2. `AUTHXTRACT_KEY` env var — recommended for CI, sourced from your secret manager
+3. `AUTHXTRACT_KEY_CMD` env var — a command whose stdout is the passphrase (pluggable Vault/KMS/secret-manager integration)
+4. OS keychain — stored once via `authxtract key store`
+5. Interactive prompt — masked, never echoed
+
+**OS keychain (recommended locally):**
+```bash
+authxtract key store    # prompts (masked) and saves to Credential Manager / Keychain / libsecret
+authxtract key status   # reports presence (exit 1 when absent); never prints the key
+authxtract key clear    # removes it
+```
+
+**Environment variable (recommended for CI):**
 ```cmd
 set AUTHXTRACT_KEY=use-a-long-random-passphrase-here
 ```
 
-**Bash:**
+**Pluggable secret manager / KMS:**
 ```bash
-export AUTHXTRACT_KEY="use-a-long-random-passphrase-here"
+export AUTHXTRACT_KEY_CMD="vault kv get -field=key secret/authxtract"
+# or: aws ssm get-parameter --name /authxtract/key --with-decryption --query Parameter.Value --output text
+# or: op read op://vault/authxtract/password
 ```
-
-*If the env var is not set, you will be prompted interactively — input is masked and never echoed. The `--key` flag still works but is **deprecated** (it leaks the key into shell history and process lists) and prints a warning.*
 
 ### 2. Capture a Session
 
@@ -69,10 +86,19 @@ authxtract capture my-app -u https://example.com/login
 *If you skipped `npm link`, use `node dist/index.js capture my-app -u https://example.com/login` instead — same effect, no global setup.*
 
 This will:
-1. Open a Chromium browser at the specified URL.
+1. Open a Chromium browser with a **fresh, isolated, throwaway profile** at the specified URL.
 2. Wait for you to complete the login process (including MFA/SSO).
 3. Press **Enter** in the terminal when login is complete.
-4. Save the encrypted storage state to `.authxtract/sessions/`.
+4. Save the encrypted storage state to `.authxtract/sessions/` and delete the temporary profile.
+
+Sessions **expire 24 hours after capture** by default. Tune it with `--ttl`:
+
+```bash
+authxtract capture my-app -u https://example.com/login --ttl 7d    # m/h/d units
+authxtract capture my-app -u https://example.com/login --ttl none  # no expiry
+```
+
+Expired sessions still appear in `list` (marked `EXPIRED`) but `export` refuses them — re-run `capture`.
 
 ### 3. List Saved Sessions
 
@@ -116,7 +142,7 @@ authxtract delete <session-name>
 
 - Status messages go to **stderr**; command data (lists, JSON, exported state) goes to **stdout**, so piping and redirection stay clean.
 - Output is TTY-aware: interactive terminals get decorated messages; non-interactive/CI runs get plain text with `warning:`/`error:` prefixes and no emoji.
-- Global flags (place before the subcommand): `--quiet` (errors and data only), `--verbose` (detailed diagnostics, including crypto error internals).
+- Global flags (place before the subcommand): `--quiet` (errors and data only), `--verbose` (detailed diagnostics, including crypto error internals), `--storage-dir <path>` (relocate the session store).
 
 | Exit code | Meaning |
 | --------- | ------- |
@@ -146,12 +172,15 @@ npx ts-node src/index.ts capture <session-name> -u <login-url>
 Quality gates (these run in CI on every push/PR):
 
 ```bash
-npm run typecheck   # tsc --noEmit
-npm run lint        # ESLint
-npm run format      # Prettier (writes)
-npm run test:unit   # offline unit tests
+npm run typecheck       # tsc --noEmit
+npm run lint            # ESLint
+npm run format          # Prettier (writes)
+npm run test:unit       # offline unit tests
+npm run test:coverage   # unit tests + c8 coverage report (coverage/)
 npm audit --audit-level=high
 ```
+
+Releases are semver-automated: update `CHANGELOG.md`, then `npm version patch|minor|major` — the quality gates run pre-version, the `v*` tag is pushed automatically, and CI generates an SBOM, creates the GitHub Release, and runs the (dry-run) npm publish.
 
 ## Using with Playwright Tests
 
@@ -193,7 +222,8 @@ TARGET_URL=https://example.com npx playwright test -g "test name" --project=chro
 
 ## Storage Location
 
-- Encrypted sessions: `.authxtract/sessions/*.json`
+- Encrypted sessions live in `.authxtract/sessions/*.json` **relative to the directory you run the CLI from** — each project gets its own store by default.
+- Use the global `--storage-dir <path>` flag to point every command at a fixed location instead, e.g. `authxtract --storage-dir ~/.authxtract list`.
 - **Do not commit these files** if you share the same key across teams, or if you consider the metadata sensitive.
 
 ## Notes

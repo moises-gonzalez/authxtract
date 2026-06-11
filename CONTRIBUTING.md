@@ -24,6 +24,7 @@ Day-to-day commands:
 | `npm run lint`       | ESLint over the repo                                    |
 | `npm run format`     | Prettier over `src/`, `tests/`, `playwright.config.ts`  |
 | `npm run test:unit`  | Offline unit tests (node:test, no browser required)     |
+| `npm run test:coverage` | Unit tests with a c8 coverage report (`coverage/`)   |
 
 ## Testing
 
@@ -57,8 +58,16 @@ reporting.
 
 ## Releases
 
-- Versioning is semver; the project stays `0.x` until the feature/test set stabilizes.
-- Update `CHANGELOG.md`, bump `package.json` and the CLI `.version(...)` in `src/index.ts`
-  together.
-- Pushing a `v*` tag triggers the tag-gated publish job (currently `npm publish --dry-run`;
-  distribution is internal-first until the project goes public).
+Releases are semver-automated via `npm version`:
+
+1. Move the relevant `CHANGELOG.md` entries from **Unreleased** into a new version section.
+2. Run `npm version patch|minor|major`:
+   - `preversion` runs the quality gates (typecheck, lint, unit tests, build);
+   - npm bumps `package.json` (the CLI reads its version from there at runtime) and creates the
+     commit + `v*` tag;
+   - `postversion` pushes the branch and tag.
+3. The pushed tag triggers the release job in CI, which generates a **CycloneDX SBOM**
+   (`npm sbom`), attaches it to an auto-created **GitHub Release**, and runs the npm publish
+   (currently `--dry-run`; distribution is internal-first until the project goes public — when
+   flipping, also enable `--provenance`, which the workflow's `id-token` permission already
+   supports).

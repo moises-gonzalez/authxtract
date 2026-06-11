@@ -13,6 +13,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { logger } from './logger';
 import { UsageError } from './errors';
+import { isExpired } from './ttl';
 
 const AUTHXTRACT_DIR = '.authxtract';
 const SESSIONS_DIR = 'sessions';
@@ -75,6 +76,35 @@ export class LegacySessionError extends Error {
         super('This session was captured with an older, insecure format. Please re-run `capture`.');
         this.name = 'LegacySessionError';
     }
+}
+
+/** The session's TTL has elapsed (metadata.expiresAt is in the past). */
+export class SessionExpiredError extends Error {
+    constructor(name: string, expiresAt: string) {
+        super(`Session "${name}" expired on ${expiresAt} — re-run \`capture\` to refresh it.`);
+        this.name = 'SessionExpiredError';
+    }
+}
+
+let storageDirOverride: string | null = null;
+
+/**
+ * Override the store root (--storage-dir). Pass null to restore the default
+ * cwd-relative `./.authxtract`. Resolved to an absolute path immediately so
+ * later cwd changes don't move the store.
+ */
+export function setStorageDir(dir: string | null): void {
+    storageDirOverride = dir === null ? null : path.resolve(dir);
+}
+
+/** Absolute path of the store root (default: `<cwd>/.authxtract`). */
+function storageRoot(): string {
+    return storageDirOverride ?? path.join(process.cwd(), AUTHXTRACT_DIR);
+}
+
+/** Absolute path of the sessions directory (for display and storage). */
+export function getSessionsRoot(): string {
+    return path.join(storageRoot(), SESSIONS_DIR);
 }
 
 /**
@@ -214,7 +244,7 @@ export function validateSessionName(name: string): string {
  * Ensure the .authxtract directory structure exists (owner-only on POSIX)
  */
 export function ensureStorageDir(): string {
-    const rootPath = path.join(process.cwd(), AUTHXTRACT_DIR);
+    const rootPath = storageRoot();
     const sessionsPath = path.join(rootPath, SESSIONS_DIR);
 
     for (const dir of [rootPath, sessionsPath]) {
@@ -251,9 +281,10 @@ function isValidSessionData(value: unknown): value is SessionData {
     const candidate = value as { metadata?: unknown; state?: unknown };
     if (typeof candidate.metadata !== 'object' || candidate.metadata === null) return false;
     if (typeof candidate.state !== 'object' || candidate.state === null) return false;
-    const metadata = candidate.metadata as { name?: unknown; url?: unknown };
+    const metadata = candidate.metadata as { name?: unknown; url?: unknown; expiresAt?: unknown };
     if (typeof metadata.name !== 'string' || metadata.name.length === 0) return false;
     if (typeof metadata.url !== 'string') return false;
+    if (metadata.expiresAt !== undefined && typeof metadata.expiresAt !== 'string') return false;
     try {
         new URL(metadata.url);
     } catch {
@@ -271,7 +302,13 @@ function malformedSessionError(name: string): Error {
 /**
  * Save storage state to a session file
  */
-export function saveSession(name: string, state: object, url: string, key?: string): void {
+export function saveSession(
+    name: string,
+    state: object,
+    url: string,
+    key?: string,
+    options?: { expiresAt?: string }
+): void {
     const sessionPath = getSessionPath(name);
 
     // Use provided key or get from env
@@ -282,6 +319,7 @@ export function saveSession(name: string, state: object, url: string, key?: stri
             name,
             url,
             capturedAt: new Date().toISOString(),
+            ...(options?.expiresAt ? { expiresAt: options.expiresAt } : {}),
         },
         state,
     };
@@ -318,6 +356,9 @@ export function loadSession(name: string, key?: string): SessionData | null {
     if (!isValidSessionData(parsed)) {
         throw malformedSessionError(name);
     }
+    if (isExpired(parsed.metadata.expiresAt)) {
+        throw new SessionExpiredError(name, parsed.metadata.expiresAt as string);
+    }
     return parsed;
 }
 
@@ -325,7 +366,7 @@ export function loadSession(name: string, key?: string): SessionData | null {
  * List all saved sessions
  */
 export function listSessions(key?: string): SessionMetadata[] {
-    const sessionsPath = path.join(process.cwd(), AUTHXTRACT_DIR, SESSIONS_DIR);
+    const sessionsPath = getSessionsRoot();
 
     if (!fs.existsSync(sessionsPath)) {
         return [];

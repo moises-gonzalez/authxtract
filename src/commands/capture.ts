@@ -3,15 +3,21 @@
  */
 
 import { chromium } from 'playwright';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import * as readline from 'readline';
 import { saveSession } from '../utils/storage';
 import { logger } from '../utils/logger';
 import { BrowserError, EXIT, InterruptedError } from '../utils/errors';
+import { expiresAtFrom } from '../utils/ttl';
 
 export interface CaptureOptions {
     url: string;
     name: string;
     key?: string;
+    /** Session lifetime in ms; null disables expiry. */
+    ttlMs: number | null;
 }
 
 /**
@@ -45,32 +51,58 @@ async function browserStep<T>(description: string, action: () => Promise<T>): Pr
     }
 }
 
+/** Remove the temporary browser profile; best-effort (Chromium may lag releasing locks). */
+function removeProfileDir(dir: string): void {
+    try {
+        fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch (error) {
+        logger.warn(`Could not remove temporary browser profile ${dir} — delete it manually.`);
+        logger.verbose('Profile cleanup failed', error);
+    }
+}
+
 /**
  * Execute the capture command
  */
 export async function capture(options: CaptureOptions): Promise<void> {
-    const { url, name, key } = options;
+    const { url, name, key, ttlMs } = options;
+    const expiresAt = expiresAtFrom(ttlMs);
 
     logger.info('authXtract — capture session', '🔐');
     logger.info(`Session name: ${name}`);
     logger.info(`Target URL: ${url}`);
+    logger.info(
+        expiresAt ? `Session expires: ${expiresAt} (change with --ttl)` : 'Session expiry: none (--ttl none)'
+    );
 
-    logger.info('Launching browser...', '🚀');
-    const browser = await browserStep('Failed to launch browser', () => chromium.launch({ headless: false }));
+    // Profile isolation: a fresh throwaway userDataDir per capture, so the
+    // browser can never see (or sweep) ambient local browser credentials.
+    const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'authxtract-profile-'));
+    logger.info('Launching browser with a temporary, isolated profile...', '🚀');
+
+    const context = await browserStep('Failed to launch browser', () =>
+        chromium.launchPersistentContext(profileDir, { headless: false })
+    ).catch((error) => {
+        removeProfileDir(profileDir);
+        throw error;
+    });
 
     // Ctrl+C outside the readline prompt: close the browser, write nothing, exit 130.
     const onSigint = (): void => {
         logger.error('Interrupted — closing browser without saving.');
-        void browser
+        void context
             .close()
             .catch(() => undefined)
-            .finally(() => process.exit(EXIT.SIGINT));
+            .finally(() => {
+                removeProfileDir(profileDir);
+                process.exit(EXIT.SIGINT);
+            });
     };
     process.once('SIGINT', onSigint);
 
     try {
-        const context = await browserStep('Failed to create browser context', () => browser.newContext());
-        const page = await browserStep('Failed to open page', () => context.newPage());
+        const page =
+            context.pages()[0] ?? (await browserStep('Failed to open page', () => context.newPage()));
         await browserStep(`Failed to navigate to ${url}`, () => page.goto(url));
 
         logger.info('Complete the login in the browser, including any MFA, SSO, or OAuth steps.', '📝');
@@ -81,11 +113,12 @@ export async function capture(options: CaptureOptions): Promise<void> {
             context.storageState()
         );
 
-        saveSession(name, storageState, url, key);
+        saveSession(name, storageState, url, key, { expiresAt });
     } finally {
-        // Always release the browser, whatever happened above (error, Ctrl+C, success).
+        // Always release the browser and its throwaway profile, whatever happened above.
         process.removeListener('SIGINT', onSigint);
-        await browser.close().catch(() => undefined);
+        await context.close().catch(() => undefined);
+        removeProfileDir(profileDir);
     }
 
     logger.success('Session captured successfully!');

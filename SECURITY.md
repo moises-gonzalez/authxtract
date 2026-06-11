@@ -9,6 +9,7 @@ vulnerabilities.
 
 | Version | Supported |
 | ------- | --------- |
+| 0.3.x   | ✅        |
 | 0.2.x   | ✅        |
 | < 0.2   | ❌ (insecure legacy CBC format — re-capture sessions) |
 
@@ -30,6 +31,15 @@ vulnerabilities.
   generic by default (no crypto internals) — pass `--verbose` for diagnostics.
 - **Loose file permissions (POSIX).** The store is created `0700`; session files and exports are
   written `0600`. On Windows, NTFS profile ACLs apply instead.
+- **Stale captured tokens.** Sessions carry a TTL (24h by default, `--ttl` to tune): expired
+  sessions are refused on export, limiting how long a forgotten store stays useful to an attacker.
+- **Ambient browser credentials during capture.** Capture launches Chromium with a fresh,
+  throwaway profile (deleted afterward) — it cannot see or sweep your personal browser profile's
+  cookies, passwords, or sessions.
+- **Key sprawl.** The passphrase can live in the OS keychain (Windows Credential Manager /
+  macOS Keychain / libsecret via `authxtract key store`), protected by your OS login, instead of
+  shell config files. Teams/CI can plug a secret manager via `AUTHXTRACT_KEY_CMD`
+  (Vault, AWS KMS/SSM, 1Password, …) so the key is never persisted locally at all.
 
 ### What authXtract does NOT protect
 
@@ -48,8 +58,9 @@ vulnerabilities.
 
 ## Handling guidance
 
-- Provide the passphrase via `AUTHXTRACT_KEY` from a secret manager in CI, or type it into the
-  masked prompt locally. Treat `--key` as deprecated.
+- Key source precedence: `--key` flag (deprecated) → `AUTHXTRACT_KEY` → `AUTHXTRACT_KEY_CMD` →
+  OS keychain → masked prompt. Locally, prefer `authxtract key store`; in CI, prefer
+  `AUTHXTRACT_KEY` from a secret manager or `AUTHXTRACT_KEY_CMD`. Treat `--key` as deprecated.
 - Treat `auth-state.json` (or any `--output` target) as a credential: short-lived, untracked,
   deleted after the test run.
 - Sessions captured before the v2 format (AES-256-GCM) are rejected — re-run `capture`.

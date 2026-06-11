@@ -11,6 +11,7 @@ export default tseslint.config(
             'playwright-report/',
             'test-results/',
             'blob-report/',
+            'coverage/',
             '.authxtract/',
         ],
     },

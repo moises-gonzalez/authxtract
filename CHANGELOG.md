@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-10
+
+Polish & scale release (improvement plan Phase 2).
+
+### Added
+
+- **OS keychain integration**: `authxtract key store|status|clear` manages the passphrase in the
+  Windows Credential Manager, macOS Keychain, or Secret Service (libsecret). Commands pick the
+  stored key up automatically when no env var is set.
+- **Pluggable KMS/Vault provider**: `AUTHXTRACT_KEY_CMD` runs any command (Vault, AWS KMS/SSM,
+  1Password, …) whose stdout becomes the passphrase. Resolution order is now
+  `--key` → `AUTHXTRACT_KEY` → `AUTHXTRACT_KEY_CMD` → OS keychain → masked prompt.
+- **Session TTL**: captures set `expiresAt` (default `--ttl 24h`; `m`/`h`/`d` units or `none`).
+  Expired sessions are refused on load/export with a re-capture message and flagged as
+  `EXPIRED` in `list`.
+- **`--storage-dir <path>`** global flag relocates the session store (default remains
+  `./.authxtract` relative to the working directory); empty `list` output now names the
+  directory it looked in.
+- **Coverage reporting**: `npm run test:coverage` (c8); CI uploads the report as an artifact.
+- **Release automation**: `npm version patch|minor|major` runs the quality gates, tags, and
+  pushes; the tag-gated CI job generates a CycloneDX SBOM, creates a GitHub Release with the
+  SBOM attached, and runs the (dry-run) npm publish with provenance wiring ready.
+
+### Changed
+
+- **Browser profile isolation**: capture now launches Chromium with a fresh temporary
+  `userDataDir` (deleted after capture) instead of the default ephemeral context, so it can
+  never observe ambient local browser credentials.
+- The CLI reads its version from `package.json` at runtime (no more hardcoded drift).
+
 ## [0.2.0] - 2026-06-10
 
 Security-hardening and production-readiness release (improvement plan Phases 0 & 1).
@@ -60,6 +90,7 @@ Sessions captured with 0.1.x use the legacy CBC format and are rejected — re-r
 - Initial release: `capture` (headed Chromium, manual MFA/SSO login), `list`, `export`,
   `delete`; sessions stored AES-256-CBC encrypted in `.authxtract/sessions/`.
 
-[Unreleased]: https://github.com/moises-gonzalez/authxtract/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/moises-gonzalez/authxtract/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/moises-gonzalez/authxtract/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/moises-gonzalez/authxtract/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/moises-gonzalez/authxtract/releases/tag/v0.1.0
