@@ -8,10 +8,16 @@
 
 import { Command, Option } from 'commander';
 import { capture } from './commands/capture';
-import { resolveKeyProvider, warnKeyFlagDeprecated } from './utils/key-provider';
-import { validateSessionName } from './utils/storage';
+import { promptMasked, resolveKeyProvider, warnKeyFlagDeprecated } from './utils/key-provider';
+import { setStorageDir, validateSessionName } from './utils/storage';
 import { logger } from './utils/logger';
 import { InterruptedError, UsageError, exitCodeFor } from './utils/errors';
+import { parseTtl } from './utils/ttl';
+import { isExpired } from './utils/ttl';
+
+// Single source of truth for the version (kept current by `npm version`).
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { version: VERSION } = require('../package.json') as { version: string };
 
 const program = new Command();
 
@@ -41,14 +47,18 @@ function handleCliError(error: unknown): never {
 program
     .name('authxtract')
     .description('Securely extract and manage authentication state from web pages')
-    .version('0.2.0')
+    .version(VERSION)
     .option('--verbose', 'Print detailed error diagnostics (may include crypto error internals)')
     .addOption(
         new Option('--quiet', 'Suppress all output except errors and command data').conflicts('verbose')
     )
+    .option('--storage-dir <path>', 'Session store root (default: ./.authxtract in the current directory)')
     .hook('preAction', () => {
-        const opts = program.opts<{ quiet?: boolean; verbose?: boolean }>();
+        const opts = program.opts<{ quiet?: boolean; verbose?: boolean; storageDir?: string }>();
         logger.configure({ quiet: opts.quiet, verbose: opts.verbose });
+        if (opts.storageDir) {
+            setStorageDir(opts.storageDir);
+        }
     });
 
 // Capture command
@@ -56,12 +66,14 @@ program
     .command('capture <name>')
     .description('Capture authentication state from a browser session')
     .requiredOption('-u, --url <url>', 'Login page URL')
+    .option('--ttl <duration>', 'Session lifetime: <n>m/<n>h/<n>d, or "none" to disable expiry', '24h')
     .option('-k, --key <key>', DEPRECATED_KEY_HELP)
-    .action(async (name: string, options: { url: string; key?: string }) => {
+    .action(async (name: string, options: { url: string; ttl: string; key?: string }) => {
         try {
             validateSessionName(name);
+            const ttlMs = parseTtl(options.ttl);
             const key = await getKey(options.key);
-            await capture({ name, url: options.url, key });
+            await capture({ name, url: options.url, key, ttlMs });
         } catch (error) {
             handleCliError(error);
         }
@@ -78,7 +90,7 @@ program
             if (options.key !== undefined) {
                 warnKeyFlagDeprecated();
             }
-            const { listSessions } = await import('./utils/storage');
+            const { listSessions, getSessionsRoot } = await import('./utils/storage');
             const sessions = listSessions(options.key);
 
             if (options.json) {
@@ -87,7 +99,7 @@ program
             }
 
             if (sessions.length === 0) {
-                logger.out('No sessions found.');
+                logger.out(`No sessions found in ${getSessionsRoot()}`);
                 return;
             }
 
@@ -96,6 +108,10 @@ program
                 logger.out(`  - ${session.name}`);
                 logger.out(`    URL: ${session.url}`);
                 logger.out(`    Captured: ${session.capturedAt}`);
+                if (session.expiresAt) {
+                    const stale = isExpired(session.expiresAt) ? ' (EXPIRED — re-run capture)' : '';
+                    logger.out(`    Expires: ${session.expiresAt}${stale}`);
+                }
             });
         } catch (error) {
             handleCliError(error);
@@ -173,6 +189,63 @@ program
                 logger.success(`Session "${name}" deleted.`);
             } else {
                 throw new UsageError(`Session "${name}" not found.`);
+            }
+        } catch (error) {
+            handleCliError(error);
+        }
+    });
+
+// Key command group — manage the passphrase in the OS keychain
+const keyCommand = program
+    .command('key')
+    .description('Manage the encryption key in the OS keychain (Credential Manager / Keychain / libsecret)');
+
+keyCommand
+    .command('store')
+    .description('Prompt for the encryption key (masked) and store it in the OS keychain')
+    .action(async () => {
+        try {
+            const { storeKeychainKey, keychainName } = await import('./utils/keychain');
+            logger.info('Encryption key to store in the OS keychain.', '🔑');
+            const key = await promptMasked('Enter encryption key (input hidden): ');
+            if (Buffer.byteLength(key, 'utf8') === 0) {
+                throw new UsageError('Encryption key must not be empty.');
+            }
+            storeKeychainKey(key);
+            logger.success(`Encryption key stored in the ${keychainName()}.`);
+            logger.info('Commands will now use it automatically when AUTHXTRACT_KEY is not set.');
+        } catch (error) {
+            handleCliError(error);
+        }
+    });
+
+keyCommand
+    .command('status')
+    .description('Report whether an encryption key is stored in the OS keychain (never prints it)')
+    .action(async () => {
+        try {
+            const { readKeychainKey, keychainName } = await import('./utils/keychain');
+            if (readKeychainKey() !== null) {
+                logger.out(`A key is stored in the ${keychainName()}.`);
+            } else {
+                logger.out(`No key stored in the ${keychainName()}.`);
+                process.exit(1);
+            }
+        } catch (error) {
+            handleCliError(error);
+        }
+    });
+
+keyCommand
+    .command('clear')
+    .description('Remove the encryption key from the OS keychain')
+    .action(async () => {
+        try {
+            const { clearKeychainKey, keychainName } = await import('./utils/keychain');
+            if (clearKeychainKey()) {
+                logger.success(`Encryption key removed from the ${keychainName()}.`);
+            } else {
+                logger.out(`No key was stored in the ${keychainName()}.`);
             }
         } catch (error) {
             handleCliError(error);

@@ -1,213 +1,245 @@
 # authXtract
 
-A CLI tool for **securely** capturing and managing authentication sessions from web browsers for Playwright automation testing. It allows manual authentication (including MFA), stores session state **encrypted at rest**, and exports decrypted JSON for testing.
+A CLI tool for **securely** capturing and managing authentication sessions from web browsers for Playwright automation testing. You authenticate manually once (including MFA/SSO/OAuth), authXtract stores the session **encrypted at rest**, and exports a decrypted Playwright `storageState` JSON only when your tests need it.
+
+```text
+headed browser (manual login) ──▶ AES-256-GCM encrypted store ──▶ decrypted storageState JSON
+                                  .authxtract/sessions/<name>.json   auth-state.json (for Playwright)
+```
 
 ## Security Features
 
-- **AES-256-GCM Authenticated Encryption**: All captured sessions are stored encrypted on disk; any tampering or wrong key fails decryption cleanly.
-- **scrypt Key Derivation**: The encryption key is derived from your passphrase with a fresh random salt per file. Passphrases can be any length.
-- **Masked Key Entry**: The interactive key prompt never echoes what you type.
-- **Strict Session Names**: Session names are validated so they can never escape the session store.
-- **Restrictive Permissions**: The store is created `0700` and session/export files `0600` (POSIX; Windows relies on profile ACLs).
-- **Secure Export**: Decrypted JSON is only generated when explicitly exported for testing, or streamed via `--stdout` to avoid persisting it.
+- **AES-256-GCM Authenticated Encryption** — sessions are encrypted on disk; any tampering or wrong key fails decryption cleanly, never silently.
+- **scrypt Key Derivation** — the AES key is derived from your passphrase with a fresh random salt per file. Passphrases can be any length.
+- **OS Keychain Integration** — store the passphrase once in the Windows Credential Manager / macOS Keychain / libsecret (`authxtract key store`); a pluggable `AUTHXTRACT_KEY_CMD` hook supports Vault/KMS/secret managers.
+- **Session TTL** — captures expire after 24 hours by default (`--ttl`), limiting the blast radius of a leaked store.
+- **Isolated Capture Profile** — each capture runs in a fresh throwaway browser profile that is deleted afterward; it can never see your personal browser's credentials.
+- **Masked Key Entry** — the interactive key prompt never echoes what you type.
+- **Strict Session Names** — names are validated (`A-Z a-z 0-9 . _ -`, max 64, no `..`) so they can never escape the session store.
+- **Restrictive Permissions** — the store is created `0700`, session and export files `0600` (POSIX; Windows relies on profile ACLs).
+- **Hardened Export** — decrypted JSON is produced only on explicit `export`, with a warning; `--stdout` streams it without persisting anything.
+
+## Requirements
+
+- **Node.js ≥ 18**
+- **Chromium** via Playwright (the only browser used — Chrome-only policy)
 
 ## Installation
 
 ```bash
-# Clone the repository
-git clone <repository-url>
+git clone https://github.com/moises-gonzalez/authxtract.git
 cd authxtract
 
-# Install dependencies
 npm install
-
-# Install Playwright browser (Chromium only)
-npx playwright install chromium
-
-# Build the project
+npx playwright install chromium   # Chromium only
 npm run build
 
 # One-time: register the `authxtract` command globally on this machine,
-# so it can be invoked via `npx authxtract …` or `authxtract …`.
-# This bypasses npm's `run` argv parsing, which otherwise eats flags
-# like `-u` and `--key` before they reach the CLI.
+# so it can be invoked as `authxtract …` or `npx authxtract …`.
 npm link
 ```
 
-## Usage
+> **Invocation note:** always run the CLI as `authxtract …`, `npx authxtract …`, or `node dist/index.js …`. Avoid `npm run start -- …` / `npm run dev -- …` for real usage — npm scans the full argv (even after `--`) for keys matching its own config, so flags like `--key` can be silently consumed before they reach the CLI, regardless of shell.
 
-### 1. Set Encryption Key (Recommended)
-Set the `AUTHXTRACT_KEY` environment variable with a strong passphrase (any length; it is run through scrypt). In CI, source it from your secret manager.
+## Quick Start
 
-**CMD (recommended):**
+```bash
+# 1. One-time: store your passphrase in the OS keychain (prompted, masked)
+authxtract key store
+
+# 2. Capture — a browser opens; log in (MFA/SSO included), then press ENTER in the terminal
+authxtract capture my-app -u https://example.com/login
+
+# 3. Export the decrypted storageState for Playwright (defaults to ./auth-state.json)
+authxtract export my-app
+
+# 4. Point your Playwright tests at it (see "Using with Playwright Tests" below)
+```
+
+## Command Reference
+
+| Command | Purpose |
+| ------- | ------- |
+| `capture <name> -u <url> [--ttl <dur>]` | Open an isolated headed browser, authenticate manually, save the encrypted session |
+| `list [--json]` | List stored sessions (decrypts metadata when a key is available) |
+| `export <name> [-o <path>] [--stdout] [--json]` | Decrypt a session to Playwright `storageState` JSON |
+| `delete <name>` | Remove a stored session |
+| `key store \| status \| clear` | Manage the passphrase in the OS keychain |
+
+Global flags go **before** the subcommand: `--quiet`, `--verbose`, `--storage-dir <path>`. `--help` and `--version` are available everywhere.
+
+## Providing the Encryption Key
+
+The passphrase can be any non-empty length (it is run through scrypt). For `capture` and `export`, sources are tried in this order:
+
+1. `--key` flag — **deprecated** (leaks into shell history/process lists; prints a warning)
+2. `AUTHXTRACT_KEY` env var — recommended for CI, sourced from your secret manager
+3. `AUTHXTRACT_KEY_CMD` env var — a command whose stdout is the passphrase (pluggable Vault/KMS/secret-manager integration)
+4. OS keychain — stored once via `authxtract key store`
+5. Interactive prompt — masked, never echoed
+
+> `list` is non-interactive by design: it only uses `--key` or `AUTHXTRACT_KEY`. Without a key it still lists sessions by filename. `delete` needs no key.
+
+**OS keychain (recommended locally):**
+
+```bash
+authxtract key store    # prompts (masked) and saves to Credential Manager / Keychain / libsecret
+authxtract key status   # reports presence (exit 1 when absent); never prints the key
+authxtract key clear    # removes it
+```
+
+**Environment variable (recommended for CI):**
+
+```bash
+export AUTHXTRACT_KEY="use-a-long-random-passphrase-here"   # bash
+```
+
 ```cmd
-set AUTHXTRACT_KEY=use-a-long-random-passphrase-here
+set AUTHXTRACT_KEY=use-a-long-random-passphrase-here        # Windows cmd
 ```
 
-**Bash:**
-```bash
-export AUTHXTRACT_KEY="use-a-long-random-passphrase-here"
-```
-
-*If the env var is not set, you will be prompted interactively — input is masked and never echoed. The `--key` flag still works but is **deprecated** (it leaks the key into shell history and process lists) and prints a warning.*
-
-### 2. Capture a Session
-
-Launch a browser, manually authenticate, and save the encrypted session:
+**Pluggable secret manager / KMS:**
 
 ```bash
-authxtract capture <session-name> -u <login-url>
-# or, equivalently:
-npx authxtract capture <session-name> -u <login-url>
+export AUTHXTRACT_KEY_CMD="vault kv get -field=key secret/authxtract"
+# or: aws ssm get-parameter --name /authxtract/key --with-decryption --query Parameter.Value --output text
+# or: op read op://vault/authxtract/password
 ```
 
-Example:
+## Commands in Detail
+
+### capture
+
 ```bash
 authxtract capture my-app -u https://example.com/login
 ```
 
-*If you skipped `npm link`, use `node dist/index.js capture my-app -u https://example.com/login` instead — same effect, no global setup.*
+1. Opens Chromium with a **fresh, isolated, throwaway profile** at the given URL.
+2. You complete the login in the browser — MFA, SSO, OAuth, anything manual.
+3. Press **Enter** in the terminal when done.
+4. The encrypted session is saved to the store and the temporary profile is deleted.
 
-This will:
-1. Open a Chromium browser at the specified URL.
-2. Wait for you to complete the login process (including MFA/SSO).
-3. Press **Enter** in the terminal when login is complete.
-4. Save the encrypted storage state to `.authxtract/sessions/`.
+Sessions **expire 24 hours after capture** by default. Tune it with `--ttl` (`m`/`h`/`d` units, max `365d`):
 
-### 3. List Saved Sessions
+```bash
+authxtract capture my-app -u https://example.com/login --ttl 7d
+authxtract capture my-app -u https://example.com/login --ttl none   # no expiry
+```
 
-View all stored sessions:
+Headless capture is intentionally unsupported — the whole point is a real, manual login.
+
+### list
 
 ```bash
 authxtract list
-authxtract list --json          # machine-readable: stdout carries JSON only
+authxtract list --json   # machine-readable: stdout carries JSON only
 ```
-*`list` reads the `AUTHXTRACT_KEY` env var (or the deprecated `--key`) to decrypt metadata, but does not prompt interactively. Without a key, sessions are listed by filename only.*
 
-### 4. Export a Session
+Shows each session's URL, capture time, and expiry. Expired sessions are marked `EXPIRED — re-run capture`; sessions in the old pre-v2 format are flagged as legacy. The empty-store message names the directory it looked in.
 
-Export a session to a plain JSON file for use in Playwright tests:
+### export
 
 ```bash
-authxtract export <session-name> --output <path>
+authxtract export my-app                          # writes ./auth-state.json (0600)
+authxtract export my-app -o ./somewhere.json      # custom path
+authxtract export my-app --stdout > state.json    # stream; nothing persisted by the CLI
+authxtract export my-app --json                   # machine-readable result (name/url/capturedAt/output)
 ```
 
-Example:
-```bash
-authxtract export my-app --output ./playwright-auth.json
+The output is **decrypted** JSON containing live session tokens — it is password-equivalent. Keep it out of version control (`auth-state.json` is gitignored here) and delete it after use. Expired sessions are refused — re-run `capture`. `--stdout` and `--json` are mutually exclusive; with `--stdout`, all warnings go to stderr so pipes stay clean.
 
-# Or avoid writing a file at all — stream the decrypted state to stdout:
-authxtract export my-app --stdout > ./playwright-auth.json
-
-# Machine-readable result (name/url/capturedAt/output) after writing the file:
-authxtract export my-app --json
-```
-**Note:** The exported file is **decrypted** standard JSON containing live session tokens — it is password-equivalent. It is written with `0600` permissions (POSIX). Keep it out of version control and delete it after use.
-
-### 5. Delete a Session
-
-Remove a stored session:
+### delete
 
 ```bash
-authxtract delete <session-name>
+authxtract delete my-app
 ```
+
+Works without a key, and also on expired or legacy sessions.
 
 ## Output, Flags & Exit Codes
 
 - Status messages go to **stderr**; command data (lists, JSON, exported state) goes to **stdout**, so piping and redirection stay clean.
 - Output is TTY-aware: interactive terminals get decorated messages; non-interactive/CI runs get plain text with `warning:`/`error:` prefixes and no emoji.
-- Global flags (place before the subcommand): `--quiet` (errors and data only), `--verbose` (detailed diagnostics, including crypto error internals).
+- `--quiet` keeps only errors and command data; `--verbose` adds diagnostics (including crypto error internals — decryption failures are intentionally generic otherwise).
 
 | Exit code | Meaning |
 | --------- | ------- |
 | `0`   | Success |
 | `1`   | Usage error — bad arguments, invalid session name, missing/empty key, unknown session |
-| `2`   | I/O or crypto failure — decryption failed, legacy/malformed file, filesystem error |
+| `2`   | I/O or crypto failure — decryption failed, expired/legacy/malformed file, filesystem error |
 | `3`   | Browser automation failure — launch, navigation, or state extraction |
 | `130` | Interrupted (Ctrl+C) — the browser is closed and nothing is written |
 
-## Development Mode
+## Session Storage
 
-Run commands without building:
-
-```bash
-npm run dev -- capture <session-name> -u <login-url>
-npm run dev -- list
-npm run dev -- export <session-name> --output <path>
-npm run dev -- delete <session-name>
-```
-
-*Same caveat as `npm run start`: npm intercepts flags it recognizes (e.g. `--key`) from the full argv even after `--`. If your flags go missing, invoke `ts-node` directly instead:*
-
-```bash
-npx ts-node src/index.ts capture <session-name> -u <login-url>
-```
-
-Quality gates (these run in CI on every push/PR):
-
-```bash
-npm run typecheck   # tsc --noEmit
-npm run lint        # ESLint
-npm run format      # Prettier (writes)
-npm run test:unit   # offline unit tests
-npm audit --audit-level=high
-```
+- Encrypted sessions live in `.authxtract/sessions/*.json` **relative to the directory you run the CLI from** — each project gets its own store by default.
+- Use the global `--storage-dir <path>` flag to point every command at a fixed location instead, e.g. `authxtract --storage-dir ~/.authxtract list`.
+- **Do not commit the store** if you share the same key across teams, or if you consider the metadata sensitive (it is gitignored here).
+- Sessions captured before the AES-256-GCM v2 format are detected and rejected with a re-capture message — encryption migration is a clean break by design.
 
 ## Using with Playwright Tests
 
-After exporting a session, use it in your Playwright tests:
+After exporting, point Playwright at the file:
 
 ```typescript
 import { test } from '@playwright/test';
 
 test.use({
-  storageState: './playwright-auth.json'
+  storageState: './auth-state.json',
 });
 
 test('authenticated test', async ({ page }) => {
   await page.goto('https://example.com/dashboard');
-  // User is already logged in
+  // Already logged in
 });
 ```
 
-## Running Tests
+## Testing This Repository
 
-Unit tests (storage/crypto/path-validation) run offline with no browser:
+Unit tests (crypto, TTL, path validation, key resolution) run offline, no browser needed:
 
 ```bash
 npm run test:unit
+npm run test:coverage   # same tests + c8 coverage report in coverage/
 ```
 
-E2E tests run on **Chrome only** and require a `TARGET_URL` env var and an exported `./auth-state.json` session file.
+E2E tests run on **Chrome only** and need a `TARGET_URL` env var plus an exported `./auth-state.json`. They verify the post-login URL is not a login page, and **skip gracefully** when either prerequisite is missing (so CI never hard-fails on them):
 
 ```bash
-# Run all tests
+# bash
 TARGET_URL=https://example.com npx playwright test --project=chromium
 
-# Run a single test file
-TARGET_URL=https://example.com npx playwright test tests/example.spec.ts --project=chromium
+# PowerShell
+$env:TARGET_URL='https://example.com'; npx playwright test --project=chromium
 
-# Run by test name
-TARGET_URL=https://example.com npx playwright test -g "test name" --project=chromium
+# Single file / by name
+TARGET_URL=https://example.com npx playwright test tests/example.spec.ts --project=chromium
+TARGET_URL=https://example.com npx playwright test -g "Authenticated page access" --project=chromium
 ```
 
-## Storage Location
+## Development
 
-- Encrypted sessions: `.authxtract/sessions/*.json`
-- **Do not commit these files** if you share the same key across teams, or if you consider the metadata sensitive.
+```bash
+npm run dev -- capture <name> -u <url>   # ts-node, no build needed (see invocation note above —
+                                          # if flags go missing, use: npx ts-node src/index.ts …)
+```
 
-## Notes
+Quality gates (CI runs these on every push/PR):
 
-- **Invocation**: Always prefer `authxtract …`, `npx authxtract …`, or `node dist/index.js …`. Avoid `npm run start -- …` and `npm run dev -- …` — npm scans the full argv (even after `--`) for keys that match its own config, so flags like `--key` get silently consumed before they reach the CLI, regardless of shell (cmd, bash, PowerShell).
-- **Encryption Key**: Any non-empty passphrase; a 32-byte AES key is derived via scrypt with a per-file salt.
-- **Legacy Sessions**: Sessions captured before the AES-256-GCM format (v2) are detected and rejected — re-run `capture` to migrate.
-- **Diagnostics**: Decryption failures are intentionally generic. Pass `--verbose` (before the subcommand) for details.
-- **Headless Mode**: Not supported. All captures are heavily manual to support MFA/SSO.
+```bash
+npm run typecheck       # tsc --noEmit
+npm run lint            # ESLint
+npm run format          # Prettier (writes)
+npm run test:coverage   # offline unit tests + coverage
+npm audit --audit-level=high
+```
+
+Releases are semver-automated: move the `CHANGELOG.md` entries out of *Unreleased*, then run `npm version patch|minor|major` — the gates run pre-version, the `v*` tag is pushed automatically, and CI generates a CycloneDX SBOM, creates the GitHub Release, and runs the (currently dry-run) npm publish.
 
 ## Project Docs
 
 - [SECURITY.md](SECURITY.md) — threat model, what the encryption does and does not guarantee, vulnerability reporting
-- [CONTRIBUTING.md](CONTRIBUTING.md) — dev setup, quality gates, PR guidelines
+- [CONTRIBUTING.md](CONTRIBUTING.md) — dev setup, quality gates, PR and release guidelines
 - [CHANGELOG.md](CHANGELOG.md) — release history (Keep a Changelog)
 
 ## License

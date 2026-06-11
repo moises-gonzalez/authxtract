@@ -27,23 +27,38 @@ jobs:
 
       - run: npm run lint
 
-      - run: npm run test:unit
+      # Unit tests with coverage reporting (c8)
+      - run: npm run test:coverage
 
       - run: npm run build
 
       # Audit failures (high or critical) block merge.
       - run: npm audit --audit-level=high
 
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 14
+
   # E2E (Playwright, Chrome only) requires a manual login against a real target,
   # so it stays out of required CI. Run it locally per README:
   #   TARGET_URL=https://example.com npx playwright test --project=chromium
   # The spec skips gracefully when TARGET_URL / auth-state.json are absent.
 
+  # Release automation (semver): cut releases with `npm version patch|minor|major`
+  # locally — preversion runs the quality gates and postversion pushes the v* tag,
+  # which triggers this job: SBOM generation, a GitHub Release, and the
+  # (currently dry-run) npm publish.
   publish:
-    name: Publish to npm (tag-gated)
+    name: Release & publish (tag-gated)
     if: startsWith(github.ref, 'refs/tags/v')
     needs: ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release
+      id-token: write # npm provenance attestation (used on real publish)
     steps:
       - uses: actions/checkout@v4
 
@@ -55,8 +70,27 @@ jobs:
 
       - run: npm ci
 
+      # SBOM (CycloneDX) for supply-chain assurance — published with the release.
+      - name: Generate SBOM
+        run: npm sbom --sbom-format cyclonedx --omit dev > sbom.cdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cdx.json
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" sbom.cdx.json \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
+
       # Internal-first distribution: keep --dry-run until the project goes
-      # public. To go live, drop --dry-run and add an NPM_TOKEN repo secret.
+      # public. To go live: drop --dry-run, add --provenance (OIDC id-token
+      # permission is already granted), and add an NPM_TOKEN repo secret.
       - run: npm publish --dry-run
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

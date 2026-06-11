@@ -1,19 +1,50 @@
+# Dependencies
+node_modules/
 
 # Playwright
-node_modules/
 /test-results/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
 /playwright/.auth/
 
-# authXtract
-/.authxtract/
+# Build & test artifacts
 /dist/
-.env
-auth-state.json
-projectplan.md
+coverage/
+*.tsbuildinfo
+*.tgz
+sbom.cdx.json
 
-# LLM Related
+# authXtract — sensitive: never commit captured or exported auth state
+/.authxtract/
+auth-state.json
+playwright-auth.json
+.env
+.env.*
+
+# Local planning & notes (kept out of the repo on purpose)
+projectplan.md
+improvementplan.md
+.project-memory
+misc/
+
+# LLM related
 .claude/
 CLAUDE.md
+
+# Competing lockfiles — CI standardizes on npm's package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Logs
+npm-debug.log*
+pnpm-debug.log*
+
+# OS noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors
+.vscode/
+.idea/

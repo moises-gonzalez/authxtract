@@ -1,0 +1,5 @@
+{
+    "reporter": ["text", "lcov"],
+    "report-dir": "coverage",
+    "exclude": ["tests/**", "dist/**", "coverage/**", "eslint.config.mjs", "playwright.config.ts"]
+}
