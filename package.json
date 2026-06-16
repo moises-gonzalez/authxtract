@@ -16,6 +16,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "setup": "playwright install chromium",
     "start": "node dist/index.js",
     "dev": "npx ts-node src/index.ts",
     "typecheck": "tsc --noEmit",

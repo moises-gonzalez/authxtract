@@ -10,14 +10,20 @@ permissions) is deliberately high.
 git clone https://github.com/moises-gonzalez/authxtract.git
 cd authxtract
 npm install
-npx playwright install chromium   # Chromium only — Chrome-only policy
+npm run setup   # downloads Chromium (Chrome-only policy)
 npm run build
 ```
+
+> If `npm run setup` sits with no output, it is waiting on a stale Playwright `__dirlock` — see
+> [Troubleshooting](README.md#troubleshooting-npm-run-setup-hangs-with-no-output) in the README for
+> the recovery steps. (`playwright install-deps` is not a fix — it installs Linux system libraries
+> only and downloads no browser.)
 
 Day-to-day commands:
 
 | Command              | What it does                                            |
 | -------------------- | ------------------------------------------------------- |
+| `npm run setup`      | Download the Chromium browser Playwright needs          |
 | `npm run dev <cmd>`  | Run the CLI via ts-node (no build needed)               |
 | `npm run build`      | Compile TypeScript to `dist/`                           |
 | `npm run typecheck`  | `tsc --noEmit` (strict + noUnused\* + noImplicitReturns) |

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`npm run setup`** script that runs `playwright install chromium`, giving a single canonical,
+  copy-pasteable step for downloading the browser (referenced from the README and CONTRIBUTING).
+
+### Changed
+
+- Installation docs now use `npm run setup` instead of a raw `npx playwright install chromium`.
+
+### Fixed
+
+- Documented the silent "hang" during browser install caused by a stale Playwright `__dirlock`
+  lockfile, with cross-platform recovery steps, and clarified that `playwright install-deps` is not
+  a substitute (Linux system deps only, downloads no browser). Fixes the confusion reported in #7.
+
 ## [0.3.0] - 2026-06-10
 
 Polish & scale release (improvement plan Phase 2).
