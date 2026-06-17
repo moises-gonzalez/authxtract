@@ -2,7 +2,7 @@
  * Capture command - Opens a browser for manual authentication and saves the session state
  */
 
-import { chromium } from 'playwright';
+import { launchWithChannel, type BrowserPreference } from '../utils/browser';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -18,6 +18,8 @@ export interface CaptureOptions {
     key?: string;
     /** Session lifetime in ms; null disables expiry. */
     ttlMs: number | null;
+    /** Resolved system-browser choice (channel or auto-detect). */
+    browser: BrowserPreference;
 }
 
 /**
@@ -65,7 +67,7 @@ function removeProfileDir(dir: string): void {
  * Execute the capture command
  */
 export async function capture(options: CaptureOptions): Promise<void> {
-    const { url, name, key, ttlMs } = options;
+    const { url, name, key, ttlMs, browser } = options;
     const expiresAt = expiresAtFrom(ttlMs);
 
     logger.info('authXtract — capture session', '🔐');
@@ -80,9 +82,7 @@ export async function capture(options: CaptureOptions): Promise<void> {
     const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'authxtract-profile-'));
     logger.info('Launching browser with a temporary, isolated profile...', '🚀');
 
-    const context = await browserStep('Failed to launch browser', () =>
-        chromium.launchPersistentContext(profileDir, { headless: false })
-    ).catch((error) => {
+    const context = await launchWithChannel(profileDir, browser).catch((error) => {
         removeProfileDir(profileDir);
         throw error;
     });
