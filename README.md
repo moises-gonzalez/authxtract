@@ -178,6 +178,49 @@ Works without a key, and also on expired or legacy sessions.
 - **Do not commit the store** if you share the same key across teams, or if you consider the metadata sensitive (it is gitignored here).
 - Sessions captured before the AES-256-GCM v2 format are detected and rejected with a re-capture message — encryption migration is a clean break by design.
 
+## Uninstall / Remove authXtract
+
+authXtract stores credential-grade data, so a complete removal has two parts — your **data** and the **program**. Do the data step **first**, while the `authxtract` command is still installed.
+
+### 1. Remove your data
+
+```bash
+authxtract list        # (optional) see what's stored first
+authxtract key clear   # remove the passphrase from the OS keychain
+```
+
+Then delete the encrypted session store. By default it lives in **`.authxtract/` relative to each directory you ran the CLI from**, so you may have one per project — remove each. If you used `--storage-dir <path>`, delete that path instead.
+
+```bash
+rm -rf ./.authxtract                          # macOS / Linux
+Remove-Item -Recurse -Force .\.authxtract     # Windows (PowerShell)
+```
+
+Also delete any `auth-state.json` files you created with `export` — they contain decrypted, password-equivalent tokens and live wherever you wrote them.
+
+### 2. Remove the program
+
+```bash
+npm uninstall -g authxtract   # removes the global command (whether installed via `npm link` or `npm i -g`)
+```
+
+If you installed from a clone (`git clone` + `npm link`), also delete the cloned repo once the global command is gone.
+
+### 3. Verify
+
+```bash
+authxtract --version   # should now report "command not found"
+npm ls -g --depth=0    # authxtract should be absent
+```
+
+If you removed the program **before** clearing the keychain, delete the entry manually (service `authxtract`, account `default`):
+
+```bash
+cmdkey /delete:authxtract:default                          # Windows
+security delete-generic-password -s authxtract -a default  # macOS
+secret-tool clear service authxtract account default       # Linux
+```
+
 ## Using with Playwright Tests
 
 After exporting, point Playwright at the file:
