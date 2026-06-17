@@ -115,7 +115,7 @@ export AUTHXTRACT_KEY_CMD="vault kv get -field=key secret/authxtract"
 authxtract capture my-app -u https://example.com/login
 ```
 
-1. Opens Chromium with a **fresh, isolated, throwaway profile** at the given URL.
+1. Opens your **system browser** (Google Chrome, or Microsoft Edge as a fallback) with a **fresh, isolated, throwaway profile** at the given URL.
 2. You complete the login in the browser — MFA, SSO, OAuth, anything manual.
 3. Press **Enter** in the terminal when done.
 4. The encrypted session is saved to the store and the temporary profile is deleted.
