@@ -19,7 +19,9 @@ export type BrowserPreference =
     | { kind: 'channel'; channel: BrowserChannel; source: 'flag' | 'env' }
     | { kind: 'auto' };
 
+// The set of accepted --browser / AUTHXTRACT_BROWSER input values.
 const VALID_CHANNELS: readonly BrowserChannel[] = ['chrome', 'msedge'];
+// The order auto-detect tries browsers in (Chrome first, then Edge).
 const AUTO_ORDER: readonly BrowserChannel[] = ['chrome', 'msedge'];
 const CHANNEL_LABELS: Record<BrowserChannel, string> = {
     chrome: 'Google Chrome',
@@ -65,6 +67,10 @@ export function resolveBrowserPreference(
  */
 export function isBrowserNotInstalledError(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error);
+    // Matches Playwright's missing-channel/browser wording. The primary signal at
+    // runtime is "distribution '<channel>' is not found"; the other arms are
+    // belt-and-suspenders. This is coupled to upstream message text by necessity —
+    // the unit tests below are the guard if Playwright ever rewords it.
     return /is not found|not installed|Executable doesn't exist|Run "npx playwright install/i.test(message);
 }
 

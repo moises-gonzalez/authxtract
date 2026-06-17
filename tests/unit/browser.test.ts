@@ -53,3 +53,10 @@ test('browser: isBrowserNotInstalledError ignores unrelated launch failures', ()
     );
     assert.equal(isBrowserNotInstalledError(other), false);
 });
+
+test('browser: isBrowserNotInstalledError ignores a navigation timeout', () => {
+    assert.equal(
+        isBrowserNotInstalledError(new Error('Navigation timeout of 30000 ms exceeded')),
+        false
+    );
+});
