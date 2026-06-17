@@ -8,6 +8,7 @@
 
 import { Command, Option } from 'commander';
 import { capture } from './commands/capture';
+import { resolveBrowserPreference } from './utils/browser';
 import { promptMasked, resolveKeyProvider, warnKeyFlagDeprecated } from './utils/key-provider';
 import { setStorageDir, validateSessionName } from './utils/storage';
 import { logger } from './utils/logger';
@@ -68,12 +69,14 @@ program
     .requiredOption('-u, --url <url>', 'Login page URL')
     .option('--ttl <duration>', 'Session lifetime: <n>m/<n>h/<n>d, or "none" to disable expiry', '24h')
     .option('-k, --key <key>', DEPRECATED_KEY_HELP)
-    .action(async (name: string, options: { url: string; ttl: string; key?: string }) => {
+    .option('--browser <name>', 'Browser to launch: chrome or msedge (default: auto-detect — Chrome, then Edge)')
+    .action(async (name: string, options: { url: string; ttl: string; key?: string; browser?: string }) => {
         try {
             validateSessionName(name);
             const ttlMs = parseTtl(options.ttl);
+            const browser = resolveBrowserPreference(options.browser);
             const key = await getKey(options.key);
-            await capture({ name, url: options.url, key, ttlMs });
+            await capture({ name, url: options.url, key, ttlMs, browser });
         } catch (error) {
             handleCliError(error);
         }
