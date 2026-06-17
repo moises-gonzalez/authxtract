@@ -67,3 +67,56 @@ export function isBrowserNotInstalledError(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error);
     return /is not found|not installed|Executable doesn't exist|Run "npx playwright install/i.test(message);
 }
+
+function launchOne(profileDir: string, channel: BrowserChannel): Promise<BrowserContext> {
+    return chromium.launchPersistentContext(profileDir, { headless: false, channel });
+}
+
+function wrapLaunchError(error: unknown): BrowserError {
+    return new BrowserError(
+        `Failed to launch browser: ${error instanceof Error ? error.message : String(error)}`
+    );
+}
+
+/**
+ * Launch a persistent context using the resolved preference. For an explicit
+ * channel, try only that one; for auto, try Chrome then Edge. A "not installed"
+ * outcome yields an actionable BrowserError (exit 3); any other launch failure
+ * is surfaced as a generic browser error.
+ */
+export async function launchWithChannel(
+    profileDir: string,
+    pref: BrowserPreference
+): Promise<BrowserContext> {
+    if (pref.kind === 'channel') {
+        try {
+            return await launchOne(profileDir, pref.channel);
+        } catch (error) {
+            if (isBrowserNotInstalledError(error)) {
+                const other: BrowserChannel = pref.channel === 'chrome' ? 'msedge' : 'chrome';
+                throw new BrowserError(
+                    `${CHANNEL_LABELS[pref.channel]} was requested (--browser ${pref.channel}) ` +
+                        `but isn't installed. Install it, or use --browser ${other}.`
+                );
+            }
+            throw wrapLaunchError(error);
+        }
+    }
+
+    for (const channel of AUTO_ORDER) {
+        try {
+            return await launchOne(profileDir, channel);
+        } catch (error) {
+            if (isBrowserNotInstalledError(error)) {
+                logger.verbose(`${CHANNEL_LABELS[channel]} not found; trying the next browser.`);
+                continue;
+            }
+            throw wrapLaunchError(error);
+        }
+    }
+
+    throw new BrowserError(
+        'No supported browser found. authXtract uses your system Google Chrome or Microsoft Edge — ' +
+            'install Google Chrome (https://www.google.com/chrome/) and try again.'
+    );
+}
