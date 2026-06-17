@@ -7,20 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **`npm run setup`** script that runs `playwright install chromium`, giving a single canonical,
-  copy-pasteable step for downloading the browser (referenced from the README and CONTRIBUTING).
-
 ### Changed
 
-- Installation docs now use `npm run setup` instead of a raw `npx playwright install chromium`.
+- **Capture uses the system browser.** `authxtract capture` now launches your installed Google
+  Chrome (falling back to Microsoft Edge) via Playwright's `channel` instead of a downloaded
+  Chromium. The runtime dependency is now `playwright-core` (no browser download). This removes the
+  install hang (#7) and the "Playwright was just installed" first-capture failure (#8) by removing
+  their root cause. The e2e test project also uses the system Chrome channel.
 
-### Fixed
+### Added
 
-- Documented the silent "hang" during browser install caused by a stale Playwright `__dirlock`
-  lockfile, with cross-platform recovery steps, and clarified that `playwright install-deps` is not
-  a substitute (Linux system deps only, downloads no browser). Fixes the confusion reported in #7.
+- **`--browser <chrome|msedge>` flag and `AUTHXTRACT_BROWSER` env var** to force a specific system
+  browser; the default auto-detects Chrome then Edge. A missing browser produces a clear, actionable
+  error instead of Playwright's generic "install all browsers" message.
+
+### Removed
+
+- The `npm run setup` script and the `npx playwright install chromium` install/troubleshooting steps —
+  nothing is downloaded anymore.
 
 ## [0.3.0] - 2026-06-10
 

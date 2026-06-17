@@ -22,7 +22,7 @@ headed browser (manual login) ──▶ AES-256-GCM encrypted store ──▶ de
 ## Requirements
 
 - **Node.js ≥ 18**
-- **Chromium** via Playwright (the only browser used — Chrome-only policy)
+- **Google Chrome or Microsoft Edge** installed on the system (Chrome-only policy; Edge is the Chromium-family fallback). authXtract uses your existing browser — it never downloads one.
 
 ## Installation
 
@@ -31,7 +31,6 @@ git clone https://github.com/moises-gonzalez/authxtract.git
 cd authxtract
 
 npm install
-npm run setup   # downloads Chromium (Chrome-only policy)
 npm run build
 
 # One-time: register the `authxtract` command globally on this machine,
@@ -41,34 +40,7 @@ npm link
 
 > **Invocation note:** always run the CLI as `authxtract …`, `npx authxtract …`, or `node dist/index.js …`. Avoid `npm run start -- …` / `npm run dev -- …` for real usage — npm scans the full argv (even after `--`) for keys matching its own config, so flags like `--key` can be silently consumed before they reach the CLI, regardless of shell.
 
-### Troubleshooting: `npm run setup` hangs with no output
-
-If `npm run setup` (or `npx playwright install chromium`) sits with no output and never returns,
-it is **not** truly stuck — it is waiting on a stale Playwright lockfile. An earlier browser
-download (an interrupted `install`, the auto-download `npm install` triggers, or a parallel run)
-left a `__dirlock` directory behind, so the new download blocks silently and only eventually prints
-`An active lockfile is found at: …\ms-playwright\__dirlock`.
-
-To recover, first close any other Playwright/Node processes, then delete the lock and re-run:
-
-```bash
-# Windows (PowerShell)
-Remove-Item -Recurse -Force "$env:LOCALAPPDATA\ms-playwright\__dirlock"
-
-# macOS
-rm -rf ~/Library/Caches/ms-playwright/__dirlock
-
-# Linux
-rm -rf ~/.cache/ms-playwright/__dirlock
-```
-
-```bash
-npm run setup
-```
-
-> **Note:** `npx playwright install-deps` is **not** a substitute. It installs Linux **system
-> dependencies** only and downloads no browser binary — on Windows and macOS it does nothing
-> useful, so it can appear to "succeed" while Chromium is still missing.
+> **Browser selection:** capture uses your system browser — Google Chrome by default, falling back to Microsoft Edge. Force one with `--browser chrome` / `--browser msedge`, or set `AUTHXTRACT_BROWSER=chrome|msedge` (useful where IT mandates a specific browser). If neither is installed, capture exits with an install message.
 
 ## Quick Start
 

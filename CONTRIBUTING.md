@@ -10,20 +10,15 @@ permissions) is deliberately high.
 git clone https://github.com/moises-gonzalez/authxtract.git
 cd authxtract
 npm install
-npm run setup   # downloads Chromium (Chrome-only policy)
 npm run build
 ```
 
-> If `npm run setup` sits with no output, it is waiting on a stale Playwright `__dirlock` — see
-> [Troubleshooting](README.md#troubleshooting-npm-run-setup-hangs-with-no-output) in the README for
-> the recovery steps. (`playwright install-deps` is not a fix — it installs Linux system libraries
-> only and downloads no browser.)
+> authXtract uses your **system** Google Chrome or Microsoft Edge (via Playwright's `channel`) — no browser download. To run the e2e tests you need Chrome (or Edge) installed locally; GitHub's `ubuntu-latest` runners already ship Google Chrome.
 
 Day-to-day commands:
 
 | Command              | What it does                                            |
 | -------------------- | ------------------------------------------------------- |
-| `npm run setup`      | Download the Chromium browser Playwright needs          |
 | `npm run dev <cmd>`  | Run the CLI via ts-node (no build needed)               |
 | `npm run build`      | Compile TypeScript to `dist/`                           |
 | `npm run typecheck`  | `tsc --noEmit` (strict + noUnused\* + noImplicitReturns) |
