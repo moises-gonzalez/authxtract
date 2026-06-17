@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--browser <chrome|msedge>` flag and `AUTHXTRACT_BROWSER` env var** to force a specific system
   browser; the default auto-detects Chrome then Edge. A missing browser produces a clear, actionable
   error instead of Playwright's generic "install all browsers" message.
+- **Uninstall / removal docs**: a README section (and CONTRIBUTING pointer) documenting how to fully
+  remove authXtract — clearing the keychain, deleting the `.authxtract` store(s) and exported files,
+  and uninstalling the global command. Addresses #9.
 
 ### Removed
 

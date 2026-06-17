@@ -15,6 +15,8 @@ npm run build
 
 > authXtract uses your **system** Google Chrome or Microsoft Edge (via Playwright's `channel`) — no browser download. To run the e2e tests you need Chrome (or Edge) installed locally; GitHub's `ubuntu-latest` runners already ship Google Chrome.
 
+> **Removing a dev install:** clear stored data first (`authxtract key clear` and delete any `.authxtract/` stores), then `npm uninstall -g authxtract` to reverse `npm link`, and delete the clone. Full steps: [Uninstall / Remove authXtract](README.md#uninstall--remove-authxtract).
+
 Day-to-day commands:
 
 | Command              | What it does                                            |
