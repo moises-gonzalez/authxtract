@@ -1,6 +1,6 @@
 {
   "name": "authxtract",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Securely extract and manage authentication state from web pages",
   "main": "dist/index.js",
   "bin": {
