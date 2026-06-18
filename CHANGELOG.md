@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-18
+
 ### Changed
 
 - **Capture uses the system browser.** `authxtract capture` now launches your installed Google
@@ -112,7 +114,8 @@ Sessions captured with 0.1.x use the legacy CBC format and are rejected — re-r
 - Initial release: `capture` (headed Chromium, manual MFA/SSO login), `list`, `export`,
   `delete`; sessions stored AES-256-CBC encrypted in `.authxtract/sessions/`.
 
-[Unreleased]: https://github.com/moises-gonzalez/authxtract/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/moises-gonzalez/authxtract/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/moises-gonzalez/authxtract/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/moises-gonzalez/authxtract/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/moises-gonzalez/authxtract/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/moises-gonzalez/authxtract/releases/tag/v0.1.0

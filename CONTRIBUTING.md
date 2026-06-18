@@ -70,7 +70,12 @@ Releases are semver-automated via `npm version`:
      commit + `v*` tag;
    - `postversion` pushes the branch and tag.
 3. The pushed tag triggers the release job in CI, which generates a **CycloneDX SBOM**
-   (`npm sbom`), attaches it to an auto-created **GitHub Release**, and runs the npm publish
-   (currently `--dry-run`; distribution is internal-first until the project goes public — when
-   flipping, also enable `--provenance`, which the workflow's `id-token` permission already
-   supports).
+   (`npm sbom`), attaches it to an auto-created **GitHub Release**, and writes release notes
+   from the commit log.
+
+Distribution is **GitHub-only**: users install from a release tag or `main` with
+`npm install -g github:moises-gonzalez/authxtract#v0.4.0` (npm builds via the `prepare`
+script on install), or from a source clone. The CI publish step runs `npm publish --dry-run`
+as a no-op safety net — there is no npm-registry release. To add npm publishing later, drop
+`--dry-run`, enable `--provenance` (the workflow's `id-token` permission already supports it),
+and add an `NPM_TOKEN` repo secret.

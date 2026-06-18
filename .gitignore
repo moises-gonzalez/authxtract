@@ -25,6 +25,8 @@ playwright-auth.json
 # Local planning & notes (kept out of the repo on purpose)
 projectplan.md
 improvementplan.md
+noNpmPlan.md
+publishingPlan.md
 .project-memory
 misc/
 

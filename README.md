@@ -26,6 +26,25 @@ headed browser (manual login) ──▶ AES-256-GCM encrypted store ──▶ de
 
 ## Installation
 
+Requires **Node.js ≥ 18**.
+
+### From a GitHub release (recommended for users)
+
+Install directly with npm — it clones, builds, and registers the `authxtract` command
+globally in one step (npm builds the TypeScript via the `prepare` script during install):
+
+```bash
+# Latest tagged release
+npm install -g github:moises-gonzalez/authxtract#v0.4.0
+
+# Or the latest commit on main
+npm install -g github:moises-gonzalez/authxtract
+```
+
+Browse all versions on the [Releases page](https://github.com/moises-gonzalez/authxtract/releases).
+
+### From source (development)
+
 ```bash
 git clone https://github.com/moises-gonzalez/authxtract.git
 cd authxtract
