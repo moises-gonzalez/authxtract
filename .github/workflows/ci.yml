@@ -89,7 +89,7 @@ jobs:
             --generate-notes
 
       # GitHub-only distribution: --dry-run is the steady state (no npm-registry
-      # release; users install via `npm install -g github:...`). To add npm
+      # release; users install from a source clone — see the README). To add npm
       # publishing later: drop --dry-run, add --provenance (OIDC id-token
       # permission is already granted), and add an NPM_TOKEN repo secret.
       - run: npm publish --dry-run

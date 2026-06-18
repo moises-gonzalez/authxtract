@@ -73,9 +73,10 @@ Releases are semver-automated via `npm version`:
    (`npm sbom`), attaches it to an auto-created **GitHub Release**, and writes release notes
    from the commit log.
 
-Distribution is **GitHub-only**: users install from a release tag or `main` with
-`npm install -g github:moises-gonzalez/authxtract#v0.4.0` (npm builds via the `prepare`
-script on install), or from a source clone. The CI publish step runs `npm publish --dry-run`
-as a no-op safety net — there is no npm-registry release. To add npm publishing later, drop
-`--dry-run`, enable `--provenance` (the workflow's `id-token` permission already supports it),
-and add an `NPM_TOKEN` repo secret.
+Distribution is **GitHub-only**: users install from a source clone (`git clone` →
+`npm install` → `npm link`; see the README). Installing straight from a git URL
+(`npm install -g github:…`) is intentionally **not** documented — npm's git-dependency
+`prepare` step does not reliably build the TypeScript sources across environments. The CI
+publish step runs `npm publish --dry-run` as a no-op safety net — there is no npm-registry
+release. To add npm publishing later, drop `--dry-run`, enable `--provenance` (the workflow's
+`id-token` permission already supports it), and add an `NPM_TOKEN` repo secret.
