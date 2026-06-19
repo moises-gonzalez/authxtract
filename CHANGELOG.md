@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Install docs**: removed the `npm install -g github:…` instructions shipped in 0.4.0. npm's
+  git-dependency `prepare` step does not reliably build the TypeScript sources across
+  environments; install from a source clone (`git clone` → `npm install` → `npm link`) instead.
+- **Changelog links**: historical compare links pointed at `v0.1.0`–`v0.3.0` tags that were
+  never created (only `v0.4.0` is tagged); they now reference the corresponding commits.
+
 ## [0.4.0] - 2026-06-18
 
 ### Changed
@@ -114,8 +122,10 @@ Sessions captured with 0.1.x use the legacy CBC format and are rejected — re-r
 - Initial release: `capture` (headed Chromium, manual MFA/SSO login), `list`, `export`,
   `delete`; sessions stored AES-256-CBC encrypted in `.authxtract/sessions/`.
 
+<!-- Only v0.4.0 is tagged; v0.1.0–v0.3.0 predate tagging, so their links reference the
+     commits where each version's work landed rather than non-existent tags. -->
 [Unreleased]: https://github.com/moises-gonzalez/authxtract/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/moises-gonzalez/authxtract/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/moises-gonzalez/authxtract/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/moises-gonzalez/authxtract/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/moises-gonzalez/authxtract/releases/tag/v0.1.0
+[0.4.0]: https://github.com/moises-gonzalez/authxtract/compare/e114521...v0.4.0
+[0.3.0]: https://github.com/moises-gonzalez/authxtract/compare/66e9589...e114521
+[0.2.0]: https://github.com/moises-gonzalez/authxtract/compare/a6b91f9...66e9589
+[0.1.0]: https://github.com/moises-gonzalez/authxtract/commit/a6b91f9

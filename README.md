@@ -26,29 +26,15 @@ headed browser (manual login) ──▶ AES-256-GCM encrypted store ──▶ de
 
 ## Installation
 
-Requires **Node.js ≥ 18**.
-
-### From a GitHub release (recommended for users)
-
-Install directly with npm — it clones, builds, and registers the `authxtract` command
-globally in one step (npm builds the TypeScript via the `prepare` script during install):
-
-```bash
-# Latest tagged release
-npm install -g github:moises-gonzalez/authxtract#v0.4.0
-
-# Or the latest commit on main
-npm install -g github:moises-gonzalez/authxtract
-```
-
-Browse all versions on the [Releases page](https://github.com/moises-gonzalez/authxtract/releases).
-
-### From source (development)
+Requires **Node.js ≥ 18**. authXtract is distributed as source on GitHub — npm compiles the
+TypeScript locally during install.
 
 ```bash
 git clone https://github.com/moises-gonzalez/authxtract.git
 cd authxtract
 
+# Installs dependencies and builds dist/ (the prepare script runs the build);
+# the explicit `npm run build` afterwards is a no-op rebuild.
 npm install
 npm run build
 
@@ -56,6 +42,8 @@ npm run build
 # so it can be invoked as `authxtract …` or `npx authxtract …`.
 npm link
 ```
+
+To install a specific released version, check out its tag first — e.g. `git checkout v0.4.0` before `npm install`. Browse versions on the [Releases page](https://github.com/moises-gonzalez/authxtract/releases).
 
 > **Invocation note:** always run the CLI as `authxtract …`, `npx authxtract …`, or `node dist/index.js …`. Avoid `npm run start -- …` / `npm run dev -- …` for real usage — npm scans the full argv (even after `--`) for keys matching its own config, so flags like `--key` can be silently consumed before they reach the CLI, regardless of shell.
 
