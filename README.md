@@ -1,5 +1,10 @@
 # authXtract
 
+[![CI](https://github.com/moises-gonzalez/authxtract/actions/workflows/ci.yml/badge.svg)](https://github.com/moises-gonzalez/authxtract/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/moises-gonzalez/authxtract)](https://github.com/moises-gonzalez/authxtract/releases)
+[![License: ISC](https://img.shields.io/github/license/moises-gonzalez/authxtract)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
+
 A CLI tool for **securely** capturing and managing authentication sessions from web browsers for Playwright automation testing. You authenticate manually once (including MFA/SSO/OAuth), authXtract stores the session **encrypted at rest**, and exports a decrypted Playwright `storageState` JSON only when your tests need it.
 
 ```text
