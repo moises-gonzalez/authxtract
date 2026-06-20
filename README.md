@@ -48,6 +48,11 @@ npm run build
 npm link
 ```
 
+> **Windows note:** `npm link` writes to the global npm prefix. If the command fails
+> with a permissions error, either run the terminal as Administrator, or set a
+> user-writable prefix first: `npm config set prefix %APPDATA%\npm` (run once,
+> no admin needed).
+
 To install a specific released version, check out its tag first — e.g. `git checkout v0.4.0` before `npm install`. Browse versions on the [Releases page](https://github.com/moises-gonzalez/authxtract/releases).
 
 > **Invocation note:** always run the CLI as `authxtract …`, `npx authxtract …`, or `node dist/index.js …`. Avoid `npm run start -- …` / `npm run dev -- …` for real usage — npm scans the full argv (even after `--`) for keys matching its own config, so flags like `--key` can be silently consumed before they reach the CLI, regardless of shell.
