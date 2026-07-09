@@ -11,6 +11,7 @@ node_modules/
 # Build & test artifacts
 /dist/
 coverage/
+.nyc_output/
 *.tsbuildinfo
 *.tgz
 sbom.cdx.json
@@ -21,6 +22,14 @@ auth-state.json
 playwright-auth.json
 .env
 .env.*
+
+# Sensitive: never commit credentials / keys / certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cert
 
 # Local planning & notes (kept out of the repo on purpose)
 projectplan.md
@@ -39,14 +48,28 @@ pnpm-lock.yaml
 yarn.lock
 
 # Logs
+*.log
 npm-debug.log*
 pnpm-debug.log*
 
+# Temp & backup files
+*.tmp
+*.temp
+*.bak
+*~
+*.swp
+*.swo
+
 # OS noise
 .DS_Store
+.AppleDouble
 Thumbs.db
+ehthumbs.db
 Desktop.ini
+$RECYCLE.BIN/
 
 # Editors
 .vscode/
 .idea/
+.history/
+*.code-workspace
